@@ -1,10 +1,43 @@
 const http = require('http');
 
+/**
+ * Server bind address configured via HOST environment variable.
+ * @constant {string}
+ * @default '127.0.0.1'
+ * @description Hostname the server will bind to. Defaults to localhost (127.0.0.1) for security.
+ * Set to '0.0.0.0' in production to accept connections from all network interfaces.
+ * @example
+ * // Bind to all interfaces
+ * // HOST=0.0.0.0 node server.js
+ */
 // Configuration with environment variable support for production flexibility
 // Motive: Allow deployment-time configuration without code changes, following 12-factor app principles
 const hostname = process.env.HOST || '127.0.0.1';
+/**
+ * Server listen port configured via PORT environment variable.
+ * @constant {number}
+ * @default 3000
+ * @description Port number the server will listen on. Defaults to 3000.
+ * Ports below 1024 require elevated privileges on Unix systems.
+ * @example
+ * // Use custom port
+ * // PORT=8080 node server.js
+ */
 const port = process.env.PORT || 3000;
 
+/**
+ * HTTP request handler that processes all incoming requests.
+ * @param {http.IncomingMessage} req - The incoming HTTP request object
+ * @param {http.ServerResponse} res - The HTTP response object for sending responses
+ * @returns {void}
+ * @throws {Error} Catches all synchronous errors and returns 500 response; prevents request errors from crashing server
+ * @description Validates request format (requires req.method and req.url), returns "Hello, World!" for all valid requests.
+ * Implements comprehensive error handling to contain errors within request scope.
+ * @example
+ * // All HTTP methods and paths return the same response
+ * // GET http://127.0.0.1:3000/ → 200 "Hello, World!"
+ * // POST http://127.0.0.1:3000/any/path → 200 "Hello, World!"
+ */
 // Request handler with proper error handling
 // Motive: Prevent request processing errors from crashing the entire server process
 const server = http.createServer((req, res) => {
@@ -37,6 +70,13 @@ const server = http.createServer((req, res) => {
   }
 });
 
+/**
+ * Handles server-level errors during initialization or binding.
+ * @listens server#error
+ * @param {Error} error - The error object containing error code and message
+ * @description Provides specific guidance for common deployment errors and exits process with code 1.
+ * Common error codes: EADDRINUSE (port already in use), EACCES (permission denied for privileged port).
+ */
 // Handle server-level errors (e.g., port already in use, permission denied)
 // Motive: Prevent unhandled server binding failures from crashing process with unclear error messages
 server.on('error', (error) => {
@@ -53,6 +93,14 @@ server.on('error', (error) => {
   process.exit(1);
 });
 
+/**
+ * Handles client connection errors and malformed requests.
+ * @listens server#clientError
+ * @param {Error} error - The error from client connection
+ * @param {net.Socket} socket - The socket connection to the client
+ * @description Sends HTTP 400 response if socket is writable, otherwise destroys socket.
+ * Prevents socket leaks and malformed requests from crashing server.
+ */
 // Handle client connection errors
 // Motive: Prevent malformed requests or client errors from leaking sockets or crashing server
 server.on('clientError', (error, socket) => {
@@ -67,6 +115,19 @@ server.on('clientError', (error, socket) => {
   }
 });
 
+/**
+ * Initiates graceful shutdown of the HTTP server.
+ * @function
+ * @param {string} signal - The process signal that triggered shutdown (SIGTERM, SIGINT)
+ * @returns {void}
+ * @description Stops accepting new connections and waits up to 10 seconds for existing connections to complete.
+ * Forces process exit if connections don't drain naturally. Ensures zero-downtime deployments by allowing
+ * in-flight requests to finish.
+ * @example
+ * // Trigger graceful shutdown
+ * // kill -SIGTERM <pid>
+ * @see README.md#operations for production shutdown procedures
+ */
 // Graceful shutdown function with timeout
 // Motive: Ensure in-flight requests complete before shutdown, preventing client errors during deployments
 function gracefulShutdown(signal) {
@@ -87,11 +148,25 @@ function gracefulShutdown(signal) {
   }, 10000); // 10 second timeout
 }
 
+/**
+ * Handles graceful shutdown signals for process management.
+ * @listens process#SIGTERM - Standard Unix process termination signal (systemd, Docker, Kubernetes)
+ * @listens process#SIGINT - Interactive termination signal (Ctrl+C)
+ * @description Both signals trigger gracefulShutdown function to allow in-flight requests to complete.
+ */
 // Handle graceful shutdown signals
 // Motive: Support standard Unix process management (kill, systemd, Docker, Kubernetes)
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+/**
+ * Last-resort error handler for uncaught exceptions.
+ * @listens process#uncaughtException
+ * @param {Error} error - The uncaught exception error object
+ * @description Logs detailed error information including stack trace, attempts graceful server shutdown,
+ * and forces exit after 5 seconds if shutdown hangs. Per Node.js best practices, application should not
+ * continue after uncaught exception as process may be in corrupted state.
+ */
 // Handle uncaught exceptions (last resort error handler)
 // Motive: Log unexpected errors and attempt graceful shutdown instead of silent crash
 process.on('uncaughtException', (error) => {
@@ -114,6 +189,15 @@ process.on('uncaughtException', (error) => {
   }, 5000);
 });
 
+/**
+ * Handles unhandled promise rejections (async errors without .catch() handlers).
+ * @listens process#unhandledRejection
+ * @param {any} reason - The rejection reason (error or any value)
+ * @param {Promise} promise - The promise that was rejected
+ * @description Treats unhandled rejections as critical errors. Logs rejection details, attempts graceful
+ * shutdown, and forces exit after 5 seconds. Prevents silent failures and data corruption from unhandled
+ * async errors.
+ */
 // Handle unhandled promise rejections
 // Motive: Catch async errors that slip through without .catch() handlers
 process.on('unhandledRejection', (reason, promise) => {
