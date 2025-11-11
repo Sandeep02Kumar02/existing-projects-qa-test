@@ -504,7 +504,7 @@ kill -TERM $SERVER_PID
 kill -INT $SERVER_PID
 ```
 
-**Implementation**: Source code at [server.js lines 72-88](server.js#L72-L88)
+**Implementation**: Source code at [server.js lines 183-214](server.js#L183-L214)
 
 ## Error Handling
 
@@ -551,7 +551,7 @@ graph TB
 
 ### Layer 1: Request-Level Errors
 
-**Where**: Inside request handler ([server.js lines 11-37](server.js#L11-L37))  
+**Where**: Inside request handler ([server.js lines 76-104](server.js#L76-L104))  
 **Handles**: Synchronous errors during request processing  
 **Response**: Returns 500 Internal Server Error to client  
 **Behavior**: Server continues running, only affected request fails
@@ -570,7 +570,7 @@ try {
 
 ### Layer 2: Server-Level Errors
 
-**Where**: `server.on('error')` handler ([server.js lines 42-54](server.js#L42-L54))  
+**Where**: `server.on('error')` handler ([server.js lines 121-133](server.js#L121-L133))  
 **Handles**: Server binding failures (EADDRINUSE, EACCES)  
 **Response**: Logs specific error message and exits with code 1  
 **Behavior**: Server cannot start, process terminates
@@ -581,14 +581,14 @@ try {
 
 ### Layer 3: Client-Level Errors
 
-**Where**: `server.on('clientError')` handler ([server.js lines 58-68](server.js#L58-L68))  
+**Where**: `server.on('clientError')` handler ([server.js lines 147-157](server.js#L147-L157))  
 **Handles**: Malformed HTTP requests or client connection errors  
 **Response**: Sends HTTP 400 response if socket writable, otherwise destroys socket  
 **Behavior**: Server continues running, only affected connection terminates
 
 ### Layer 4: Process-Level Errors
 
-**Where**: `process.on('uncaughtException')` and `process.on('unhandledRejection')` ([server.js lines 97-137](server.js#L97-L137))  
+**Where**: `process.on('uncaughtException')` and `process.on('unhandledRejection')` ([server.js lines 228-279](server.js#L228-L279))  
 **Handles**: Uncaught exceptions and promise rejections that slip through other layers  
 **Response**: Logs full error details, attempts graceful shutdown, forces exit after 5 seconds  
 **Behavior**: Server terminates (per Node.js best practices, never continue after uncaught exception)
