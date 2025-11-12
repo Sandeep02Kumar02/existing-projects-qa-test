@@ -2,7 +2,30 @@
 
 # 0. Agent Action Plan
 
-## 0.1 Executive Summary
+**DOCUMENT UPDATE NOTICE:** This technical specification originally documented the production hardening implementation (Phase 1). The server has since been migrated to Express.js framework v4.21.2 (Phase 2) while preserving all production hardening features. Both implementations are documented below.
+
+## 0.0 Latest Feature: Express.js Migration
+
+**Status:** COMPLETED
+
+The Node.js HTTP server has been successfully migrated from the native `http` module to Express.js framework v4.21.2. This migration includes:
+
+- ✅ Express.js framework integration with routing and middleware
+- ✅ Two endpoints: GET / (returns "Hello, World!") and GET /evening (returns "Good evening")  
+- ✅ Express error handling middleware replacing try-catch patterns
+- ✅ All production hardening features preserved (graceful shutdown, error handlers, signal handling)
+- ✅ Updated dependencies: package.json and package-lock.json now include Express.js v4.21.2
+- ✅ **Dependency Policy Updated:** Server now uses Express.js framework as its sole external dependency (previously zero dependencies)
+
+**Key Changes:**
+- Import: `const express = require('express');` replaces `const http = require('http');`
+- Routes: Express route handlers replace monolithic request callback
+- Error Handling: 4-parameter Express middleware replaces try-catch wrappers
+- Server: `app.listen()` replaces `http.createServer().listen()`
+
+## 0.1 Executive Summary (Production Hardening - Phase 1)
+
+**NOTE:** This section documents the original production hardening implementation which is now integrated with Express.js.
 
 Based on the bug description, the Blitzy platform understands that the task requires a comprehensive review and hardening of server.js to address multiple production-readiness issues. The file currently implements a minimal HTTP server using Node.js built-in http module that lacks critical error handling, graceful shutdown mechanisms, input validation, and resource cleanup capabilities.
 
@@ -6024,34 +6047,41 @@ flowchart TD
 
 This section documents key architectural decisions using the Architecture Decision Record (ADR) format, capturing context, decisions, rationale, and trade-offs.
 
-#### 5.3.1.1 ADR-001: Zero External Dependencies
+#### 5.3.1.1 ADR-001: Minimal External Dependencies (Updated for Express.js Migration)
 
-**Status**: Accepted and Implemented
+**Status**: Updated and Implemented
+
+**Original Decision (Phase 1 - Production Hardening):**
+Zero external dependencies - implement using only Node.js built-in modules.
+
+**Updated Decision (Phase 2 - Express.js Migration):**
+Minimal external dependencies - Express.js framework v4.21.2 as the sole dependency.
 
 **Context:**
-The system serves as a test fixture for Backprop integration validation. Test fixtures require stable, deterministic behavior to provide reliable baselines for analysis tool testing. External npm dependencies introduce variability through version updates, security patches, registry availability, and transitive dependency changes.
+The system serves as a test fixture for Backprop integration validation. During Phase 2, the requirement was added to migrate from native `http` module to Express.js framework while maintaining all production hardening features. This necessitated relaxing the zero-dependency constraint to allow Express.js and its transitive dependencies.
 
-**Decision:**
-Implement the HTTP server using only Node.js built-in modules with zero external npm packages. The `package.json` file declares no `dependencies` or `devDependencies` sections, and `package-lock.json` confirms zero resolved packages.
+**Revised Policy:**
+Implement the HTTP server using Express.js framework v4.21.2. The `package.json` file declares Express.js as the sole production dependency. Express.js and its ~30 transitive dependencies are pinned via `package-lock.json` for reproducibility.
 
-**Rationale:**
+**Rationale (Updated for Express.js):**
 
-1. **Deterministic Behavior**: Built-in modules are versioned with Node.js runtime, ensuring consistent behavior across environments with the same Node.js version
-2. **Supply Chain Security**: Zero dependencies eliminates supply chain attack surface (no malicious packages, no dependency confusion attacks)
-3. **Installation Speed**: `npm install` completes in milliseconds with no packages to download or install
-4. **Maintenance Burden**: No dependency updates, security patches, or breaking changes to manage
-5. **Test Isolation**: Removes confounding variables from Backprop integration testing
+1. **Framework Benefits**: Express.js provides clean routing, middleware architecture, and production-ready error handling patterns
+2. **Maintained Determinism**: package-lock.json pins exact versions of Express.js and all ~30 transitive dependencies
+3. **Acceptable Trade-offs**: Express.js v4.21.2 is mature, stable, and widely used in production environments
+4. **Supply Chain Security**: Single well-maintained dependency is manageable; use `npm audit` for vulnerability scanning
+5. **Feature Requirements**: Express.js migration was an explicit feature requirement; maintained all production hardening
 
-**Consequences:**
+**Consequences (Updated):**
 
-- **Positive**: Eliminated supply chain risks, guaranteed reproducibility, minimal installation overhead
-- **Negative**: No framework conveniences (routing, middleware, template engines), manual implementation of all functionality
-- **Risk Mitigation**: For a 14-line static response server, framework features provide no value—raw `http` module is sufficient
+- **Positive**: Clean routing architecture, middleware patterns, framework best practices, maintained all production hardening features
+- **Negative**: Added ~30 transitive dependencies, increased installation time to ~2-3 seconds, requires npm audit monitoring
+- **Risk Mitigation**: Express.js v4.x is battle-tested with 10+ years of production use; version pinning via package-lock.json ensures reproducibility
 
-**Evidence:**
-- `package.json` lines 1-11: No dependency declarations
-- `package-lock.json` lines 6-12: Empty packages tree (only root package listed)
-- Technical Specification Section 3.2: Zero-dependency architecture documented
+**Evidence (Updated):**
+- `package.json`: Express.js v4.21.2 declared as sole dependency
+- `package-lock.json`: Full dependency tree with ~30 packages pinned to specific versions
+- `server.js`: Express.js integration with app.listen(), routing, and middleware
+- Technical Specification Section 0.0: Express.js migration documented
 
 #### 5.3.1.2 ADR-002: Localhost-Only Network Binding
 

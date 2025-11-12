@@ -26,10 +26,10 @@ The Node.js HTTP server has been successfully hardened with comprehensive produc
 - **Error Handling:** PASSED - All error conditions handled gracefully
 
 ✅ **Code Quality:**
-- 134 lines of production-ready code added
+- 144 lines of production-ready code implemented
 - Comprehensive inline documentation with "Motive" explanations
-- Zero external dependencies (uses only Node.js built-ins)
-- Follows Node.js official best practices
+- Minimal external dependencies (Express.js framework only)
+- Follows Express.js and Node.js official best practices
 
 ### Critical Unresolved Issues
 
@@ -75,38 +75,56 @@ pie title Project Completion by Hours
 
 ### Features Implemented
 
-1. ✅ **Environment Variable Configuration**
+1. ✅ **Express.js Framework Integration**
+   - Migration from native http module to Express.js v4.21.2
+   - Express routing for clean endpoint management
+   - Express error handling middleware
+   - Maintained all production hardening features
+
+2. ✅ **HTTP Endpoints**
+   - GET / - Returns "Hello, World!" (original endpoint)
+   - GET /evening - Returns "Good evening" (new endpoint)
+   - Automatic 404 handling for undefined routes
+   - Consistent response format (text/plain, 200 status)
+
+3. ✅ **Environment Variable Configuration**
    - Support for HOST and PORT environment variables
    - Follows 12-factor app principles
+   - Works seamlessly with Express.js
 
-2. ✅ **Request Handler Error Protection**
-   - Try-catch wrapper around request processing
-   - Input validation for req.method and req.url
+4. ✅ **Error Handling Middleware**
+   - Express error handling middleware (4-parameter function)
+   - Catches synchronous and asynchronous errors
    - 400 Bad Request responses for invalid input
    - 500 Internal Server Error responses for exceptions
+   - Prevents "headers already sent" errors
 
-3. ✅ **Server-Level Error Handling**
+5. ✅ **Server-Level Error Handling**
    - server.on('error') handler for binding failures
    - Specific handling for EADDRINUSE (port in use)
    - Specific handling for EACCES (permission denied)
+   - Compatible with Express.js server instance
 
-4. ✅ **Client Error Handling**
+6. ✅ **Client Error Handling**
    - server.on('clientError') handler
    - Graceful handling of malformed requests
    - Socket cleanup to prevent leaks
+   - Works with underlying http.Server from Express
 
-5. ✅ **Graceful Shutdown**
+7. ✅ **Graceful Shutdown**
    - gracefulShutdown() function with connection draining
    - 10-second timeout for forced shutdown
    - SIGTERM signal handler
    - SIGINT signal handler
+   - Compatible with Express server instance
 
-6. ✅ **Process-Level Error Handlers**
+8. ✅ **Process-Level Error Handlers**
    - process.on('uncaughtException') with graceful shutdown
    - process.on('unhandledRejection') with graceful shutdown
    - 5-second timeout for forced exit after critical errors
+   - Framework-independent error handling
 
-7. ✅ **Enhanced Logging**
+9. ✅ **Enhanced Logging**
    - Descriptive error messages for all error conditions
    - Startup information logging
    - Shutdown status logging
@@ -179,10 +197,10 @@ npm --version
 
 **Step 3: Install Dependencies**
 ```bash
-# Install project dependencies (no external dependencies required)
+# Install project dependencies (Express.js and its dependencies)
 npm install
 ```
-Expected output: Installation completes in < 1 second with 0 vulnerabilities
+Expected output: Installation completes with Express.js v4.21.2 and its transitive dependencies
 
 **Step 4: Verify Syntax**
 ```bash
@@ -432,7 +450,7 @@ CMD ["node", "server.js"]
 
 | Risk | Description | Severity | Likelihood | Mitigation |
 |------|-------------|----------|------------|------------|
-| None Identified | Server is self-contained with zero external dependencies | N/A | N/A | N/A |
+| Express.js Dependency | Server depends on Express.js framework and its transitive dependencies | Low | N/A | Use npm audit regularly; pin versions in package-lock.json; Express.js is mature and widely used |
 
 ---
 
@@ -511,10 +529,11 @@ This PR implements comprehensive production-ready error handling for the minimal
 
 ### Production Readiness
 
-- Zero external dependencies (uses only Node.js built-ins)
+- Minimal external dependencies (Express.js framework v4.21.2 only)
 - Comprehensive inline documentation
 - Compatible with PM2, systemd, Docker, Kubernetes
 - Ready for immediate production deployment
+- Follows Express.js best practices for production applications
 
 ### Validation Results
 
