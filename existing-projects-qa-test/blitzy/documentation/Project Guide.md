@@ -21,7 +21,7 @@ The Node.js HTTP server has been successfully hardened with comprehensive produc
 
 ✅ **Validation Results:**
 - **Compilation:** PASSED - Zero syntax errors
-- **Testing:** 5/5 tests PASSED (100% success rate)
+- **Testing:** 6/6 tests PASSED (100% success rate)
 - **Runtime:** PASSED - Server operates correctly under all test scenarios
 - **Error Handling:** PASSED - All error conditions handled gracefully
 
@@ -131,11 +131,12 @@ pie title Project Completion by Hours
 
 ### Test Results
 
-**Comprehensive Test Suite: 5/5 Tests Passed (100%)**
+**Comprehensive Test Suite: 6/6 Tests Passed (100%)**
 
 ```
 ✓ Server should start and listen on specified port
-✓ Server should respond to HTTP GET requests
+✓ Server should respond to HTTP GET requests on /
+✓ Server should respond to HTTP GET requests on /evening
 ✓ Server should handle SIGTERM gracefully
 ✓ Server should handle SIGINT gracefully
 ✓ Server should handle port conflicts
@@ -143,7 +144,7 @@ pie title Project Completion by Hours
 
 ### Runtime Validation
 
-- **Normal Operation:** Server starts successfully, responds with "Hello, World!"
+- **Normal Operation:** Server starts successfully, responds with "Hello, World!" on GET / and "Good evening" on GET /evening
 - **Environment Variables:** PORT and HOST configuration working correctly
 - **Error Handling:** Port conflicts handled gracefully with clear error messages
 - **Graceful Shutdown:** SIGTERM and SIGINT both trigger proper connection draining
@@ -273,6 +274,26 @@ Content-Type: text/plain
 Hello, World!
 ```
 
+**Step 2.5: Verify Evening Endpoint**
+```bash
+# Check that new evening endpoint works
+curl http://127.0.0.1:3000/evening
+```
+Expected output: `Good evening`
+
+```bash
+# Check HTTP status code and response for evening endpoint
+curl -i http://127.0.0.1:3000/evening
+```
+Expected output:
+```
+HTTP/1.1 200 OK
+Content-Type: text/plain
+...
+
+Good evening
+```
+
 **Step 3: Verify Graceful Shutdown**
 ```bash
 # Start server
@@ -313,25 +334,26 @@ Port 3000 is already in use
 
 ### Example Usage
 
-**Basic HTTP Request:**
+**Basic HTTP Request (Hello World endpoint):**
 ```bash
-# GET request to server
+# GET request to root endpoint
 curl http://127.0.0.1:3000/
 ```
 Response: `Hello, World!`
 
+**Evening Endpoint:**
+```bash
+# GET request to evening endpoint
+curl http://127.0.0.1:3000/evening
+```
+Response: `Good evening`
+
 **Test with Different HTTP Methods:**
 ```bash
-# POST request
+# POST request to root endpoint (Express will return 404 - method not allowed)
 curl -X POST http://127.0.0.1:3000/
 ```
-Response: `Hello, World!`
-
-```bash
-# PUT request
-curl -X PUT http://127.0.0.1:3000/
-```
-Response: `Hello, World!`
+Note: Express.js routes are method-specific. Only GET / and GET /evening are defined. Other methods (POST, PUT, DELETE) will return 404 Not Found unless explicitly defined.
 
 **Test Error Handling:**
 ```bash
@@ -339,6 +361,13 @@ Response: `Hello, World!`
 echo -e "INVALID HTTP REQUEST" | nc 127.0.0.1 3000
 ```
 Response: `HTTP/1.1 400 Bad Request`
+
+**Test Undefined Route:**
+```bash
+# Request to undefined route
+curl http://127.0.0.1:3000/undefined
+```
+Response: Express.js automatic 404 handling
 
 ### Common Issues and Resolutions
 
@@ -522,7 +551,7 @@ This PR implements comprehensive production-ready error handling for the minimal
 
 ### Testing
 
-- ✅ 5/5 automated tests passing (100% success rate)
+- ✅ 6/6 automated tests passing (100% success rate)
 - ✅ Manual integration testing completed
 - ✅ Error scenarios validated (port conflicts, malformed requests, signals)
 - ✅ Performance validated (no degradation)
@@ -549,7 +578,7 @@ This PR implements comprehensive production-ready error handling for the minimal
 ### Completion Metrics
 - **Project Completion:** 79.5% (15.5h completed / 19.5h total)
 - **Code Completion:** 100% (all specified features implemented)
-- **Test Coverage:** 100% (5/5 tests passing)
+- **Test Coverage:** 100% (6/6 tests passing)
 - **Validation Success:** 100% (all gates passed)
 
 ### Quality Metrics
@@ -599,8 +628,10 @@ This PR implements comprehensive production-ready error handling for the minimal
 ## Appendix: Technical Details
 
 ### Dependencies
-- **Node.js Built-in Modules:** http, process
-- **External Dependencies:** None
+- **Node.js Built-in Modules:** http (via Express.js), process
+- **External Dependencies:** 
+  * express: ^4.21.2 (web framework)
+  * ~30 transitive dependencies (body-parser, cookie, debug, etc.)
 - **Development Dependencies:** None
 
 ### Environment Variables
@@ -630,6 +661,7 @@ This PR implements comprehensive production-ready error handling for the minimal
 
 ---
 
-**Document Version:** 1.0  
-**Generated:** 2024-11-10  
-**Status:** Final - Production Ready
+**Document Version:** 2.0  
+**Last Updated:** 2024-11-12  
+**Status:** Updated - Express.js Migration Complete  
+**Previous Version:** 1.0 (Native http module hardening)
