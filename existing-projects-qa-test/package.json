@@ -1,8 +1,9 @@
 {
     "name": "hello_world",
     "version": "1.0.0",
-    "description": "Hello world in Node.js",
-    "main": "index.js",
+    "description": "Production-ready Node.js HTTP server with zero dependencies, comprehensive error handling, and graceful shutdown",
+    "main": "server.js",
+    "keywords": ["http", "server", "nodejs", "zero-dependencies", "graceful-shutdown", "production-ready"],
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },

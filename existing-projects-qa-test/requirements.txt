@@ -1,0 +1,14 @@
+# Flask HTTP Server Dependencies
+# Python rewrite of Node.js hello_world server
+
+# Flask web framework
+Flask==3.0.0
+
+# WSGI utilities (bundled with Flask)
+Werkzeug==3.0.1
+
+# Other Flask dependencies (automatically installed)
+click>=8.1.7
+itsdangerous>=2.1.2
+Jinja2>=3.1.2
+MarkupSafe>=2.1.3
