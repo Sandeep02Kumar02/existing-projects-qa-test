@@ -2,976 +2,856 @@
 
 # 0. Agent Action Plan
 
-## 0.1 Executive Summary
+## 0.1 Intent Clarification
 
-Based on the bug description, the Blitzy platform understands that the task requires a comprehensive review and hardening of server.js to address multiple production-readiness issues. The file currently implements a minimal HTTP server using Node.js built-in http module that lacks critical error handling, graceful shutdown mechanisms, input validation, and resource cleanup capabilities.
+### 0.1.1 Core Feature Objective
 
-**Precise Technical Description:**
+Based on the prompt, the Blitzy platform understands that the new feature requirement is to migrate an existing Node.js HTTP server from the built-in `http` module to the Express.js framework and add a new endpoint that returns the response "Good evening".
 
-The current server.js implementation exposes the following production risks:
+**Enhanced Feature Requirements:**
 
-- **Request Handler Crashes:** Unhandled exceptions within the request callback cause the entire Node.js process to terminate immediately, resulting in service downtime
-- **Missing Server-Level Error Handling:** No error event listeners on the server instance to handle binding failures (EADDRINUSE, EACCES) or other server-level errors
-- **No Graceful Shutdown:** Missing signal handlers for SIGTERM and SIGINT, preventing proper connection draining during deployments or restarts
-- **Unhandled Process-Level Errors:** No handlers for uncaughtException and unhandledRejection events, allowing errors to crash the process unexpectedly
-- **Missing Client Error Handling:** No clientError event handler to manage malformed HTTP requests or connection issues
-- **Lack of Input Validation:** Request handler processes all requests without validating basic HTTP properties
-- **No Resource Cleanup:** Server shutdown does not implement connection draining or cleanup mechanisms
+- **Primary Requirement**: Integrate Express.js framework into the existing Node.js project that currently uses the built-in `http` module
+- **Secondary Requirement**: Maintain the existing endpoint functionality that returns "Hello, World!" response
+- **Tertiary Requirement**: Add a new endpoint that returns "Good evening" as the response
+- **Implicit Requirement**: Preserve all existing production-ready error handling, graceful shutdown mechanisms, and process-level safety nets that were implemented in the current server
+- **Implicit Requirement**: Update package.json dependencies to include Express.js with appropriate versioning
+- **Implicit Requirement**: Ensure backward compatibility with existing environment variable configuration (HOST and PORT)
+- **Implicit Requirement**: Maintain zero-downtime deployment capabilities and signal handling (SIGTERM/SIGINT)
 
-**Error Type Classification:**
+**Feature Dependencies and Prerequisites:**
 
-- **Runtime Errors:** Null reference exceptions, type errors, and malformed request data cause process crashes
-- **Configuration Errors:** Port conflicts and permission issues are not handled, leading to silent failures or crashes
-- **Signal Handling Failures:** Deployment signals (SIGTERM/SIGINT) terminate the process abruptly, dropping active connections
+- Node.js runtime v18.0.0 or higher (current: v20.19.5 ✓)
+- npm package manager for dependency installation
+- Express.js framework (recommended: v4.21.x for stability, or v5.1.0 for latest features)
+- Existing server.js comprehensive error handling patterns must be adapted to Express middleware
+- Current production-hardening features (graceful shutdown, error boundaries) must be preserved
 
-**Reproduction Steps:**
+### 0.1.2 Special Instructions and Constraints
 
-```bash
-# Step 1: Start the vulnerable server
-node server.js
+**Critical Directives:**
 
-#### Step 2: Send a request that triggers an error in the handler
-#### (Modifying server.js to throw an error demonstrates immediate crash)
+- **Preserve Production Hardening**: The existing server.js contains comprehensive production-ready error handling including request handler error boundaries, server-level error handling, graceful shutdown with connection draining, process-level safety nets (uncaughtException, unhandledRejection), and client error handling. All of these mechanisms MUST be preserved and adapted to work with Express.js middleware patterns.
 
-#### Step 3: Attempt graceful shutdown
-kill -SIGTERM <pid>
-#### Result: Process terminates immediately without draining connections
+- **Maintain Zero-Dependency Philosophy (Partially)**: The original project followed a strict zero-dependency policy to minimize attack surface. This constraint must be relaxed ONLY for Express.js and its required dependencies. No additional third-party packages should be introduced beyond what Express.js itself requires.
 
-#### Step 4: Start server on privileged port
-sudo node server.js
-#### Result: No error handling for EACCES or other binding errors
-```
+- **Environment Variable Configuration**: The current server uses HOST (default: 127.0.0.1) and PORT (default: 3000) environment variables following 12-factor app principles. This configuration approach must be maintained in the Express.js implementation.
 
-The Blitzy platform recognizes these issues represent critical production vulnerabilities that must be addressed through comprehensive error handling, signal management, and input validation enhancements.
+- **Backward Compatibility**: The migration to Express.js should not break any existing operational procedures, deployment scripts, or monitoring integrations documented in the blitzy/documentation folder.
 
-## 0.2 Root Cause Identification
+**Architectural Requirements:**
 
-Based on comprehensive research and testing, THE root causes are:
+- Follow Express.js best practices for middleware organization and error handling
+- Use Express.js built-in middleware where possible (express.json(), express.urlencoded(), etc.)
+- Implement error handling middleware following Express.js conventions (4-parameter error handlers)
+- Maintain the existing request validation patterns adapted to Express.js request/response objects
+- Preserve all existing logging statements and error reporting mechanisms
 
-#### Primary Root Cause 1: Missing Request Handler Error Boundary
+**User-Provided Environment Variables:**
 
-**Located in:** server.js, lines 6-10
+The user has provided the following environment variables that are available in the runtime environment:
+- Api Key
+- Token  
+- https://8008
 
-**Triggered by:** Any synchronous exception thrown within the request callback function, including null references, type errors, or failed assertions
+Note: These environment variables are available but should not require explicit handling in code unless the user specifies their usage. The existing HOST and PORT environment variables should continue to be the primary configuration mechanism.
 
-**Evidence:**
+### 0.1.3 Technical Interpretation
 
-Testing demonstrates that errors in the request handler immediately crash the Node.js process:
+Based on the feature requirements, the Blitzy platform interprets the implementation strategy as follows:
 
-```javascript
-// Test case that proves the crash
-const testServer = http.createServer((req, res) => {
-  const data = null;
-  console.log(data.property); // TypeError: Cannot read properties of null
-});
-// Result: Process exits with code 1, all connections dropped
-```
+**These feature requirements translate to the following technical implementation strategy:**
 
-**Technical Mechanism:** Node.js HTTP server request callbacks execute in the event loop without implicit error handling. Unhandled exceptions bubble up to the process level, triggering default termination behavior.
+- **To implement Express.js integration**: We will modify `existing-projects-qa-test/server.js` by replacing the native `http.createServer()` implementation with Express.js application initialization, while preserving all production-hardening patterns as Express middleware and error handlers.
 
-#### Primary Root Cause 2: Missing Server Error Event Handler
+- **To maintain the existing "Hello, World!" endpoint**: We will create an Express route handler for the root path (`GET /`) that returns the existing "Hello, World!" response with appropriate status codes and headers.
 
-**Located in:** server.js, lines 12-14 (server.listen call has no error handling)
+- **To add the "Good evening" endpoint**: We will create a new Express route handler for a dedicated path (suggested: `GET /evening`) that returns "Good evening" as the response, following the same response pattern as the existing endpoint.
 
-**Triggered by:** Port binding failures (EADDRINUSE when port already in use, EACCES for privileged ports without permissions), network interface errors, or system resource exhaustion
+- **To preserve request validation**: We will implement Express middleware that validates request properties (method, url) before reaching route handlers, replicating the existing validation logic.
 
-**Evidence:**
+- **To maintain error boundaries**: We will implement Express error-handling middleware that catches both synchronous and asynchronous errors, replicating the try-catch patterns from the original implementation.
 
-Analysis shows zero error event listeners on the server instance:
+- **To preserve graceful shutdown**: We will adapt the existing gracefulShutdown function to work with Express.js server instance, maintaining the 10-second timeout and connection draining behavior.
 
-```bash
-# Command executed:
-node -e "const http = require('http'); const s = http.createServer(() => {}); console.log('error listeners:', s.listenerCount('error'))"
+- **To maintain server-level error handling**: We will preserve all server event listeners ('error', 'clientError') on the Express server instance, maintaining the existing EADDRINUSE and EACCES handling logic.
 
-#### Output:
-error listeners: 0
-```
+- **To preserve process-level safety nets**: We will maintain all process event listeners (SIGTERM, SIGINT, uncaughtException, unhandledRejection) without modification, as these are Node.js process-level handlers independent of the HTTP framework.
 
-**Technical Mechanism:** The http.Server instance extends EventEmitter and emits 'error' events for binding and operational failures. Without an error listener, these events go unhandled, causing the process to crash with an uncaught exception.
+- **To update dependencies**: We will modify `existing-projects-qa-test/package.json` to add Express.js as a production dependency with explicit version pinning for reproducibility.
 
-#### Primary Root Cause 3: Missing Graceful Shutdown Signal Handlers
+- **To maintain documentation consistency**: We will note that the blitzy/documentation folder contains governance artifacts that may need updates to reflect the Express.js migration, though the core production-hardening principles remain unchanged.
 
-**Located in:** Nowhere in server.js (handlers are completely absent)
+## 0.2 Repository Scope Discovery
 
-**Triggered by:** Process manager signals during deployments (SIGTERM), user interruption (SIGINT/Ctrl+C), or container orchestration lifecycle events
+### 0.2.1 Comprehensive File Analysis
 
-**Evidence:**
+**Existing Files Requiring Modification:**
 
-Process inspection confirms no signal handlers registered:
+The following existing files have been identified and will require updates:
 
-```bash
-# Verification command:
-node -p "process.listenerCount('SIGTERM') + process.listenerCount('SIGINT')"
+| File Path | Current Purpose | Required Modifications | Impact Level |
+|-----------|----------------|------------------------|--------------|
+| `existing-projects-qa-test/server.js` | Main HTTP server using Node.js http module with production hardening | Replace http.createServer with Express app; convert request handler to Express routes; adapt error handling to Express middleware | **CRITICAL** |
+| `existing-projects-qa-test/package.json` | npm manifest with zero dependencies | Add Express.js to dependencies object; optionally update scripts for Express patterns | **HIGH** |
+| `existing-projects-qa-test/package-lock.json` | npm lockfile with no transitive dependencies | Will be automatically regenerated by npm install to include Express.js and its dependencies | **HIGH** |
+| `existing-projects-qa-test/README.md` | Minimal project marker indicating "Do not touch!" warning | May require update to reflect Express.js usage, though currently minimal | **LOW** |
+| `existing-projects-qa-test/blitzy/documentation/Project Guide.md` | Operational runbook with implementation notes, deployment examples, and verification workflows | Update to reflect Express.js framework; modify code examples; update dependency policy section | **MEDIUM** |
+| `existing-projects-qa-test/blitzy/documentation/Technical Specifications.md` | Remediation spec with zero-dependency policy and verification suite | Update Agent Action Plan section; revise dependency policy; update verification commands if needed | **MEDIUM** |
 
-#### Output:
-0
-```
+**Integration Point Discovery:**
 
-**Technical Mechanism:** When SIGTERM or SIGINT signals are received without custom handlers, Node.js default behavior immediately terminates the process. Active HTTP connections are severed mid-request, causing client errors and potential data loss.
+- **Main Entry Point**: `existing-projects-qa-test/server.js` (lines 1-144)
+  - Lines 1-6: Configuration and imports - MODIFY to require Express
+  - Lines 8-38: Request handler with error boundaries - CONVERT to Express routes and middleware
+  - Lines 40-54: Server error event handler - ADAPT to Express server instance
+  - Lines 56-68: Client error handler - PRESERVE on Express server
+  - Lines 70-88: Graceful shutdown function - ADAPT to use Express server reference
+  - Lines 90-137: Process signal and error handlers - PRESERVE unchanged
+  - Lines 139-143: Server listen call - CONVERT to Express app.listen
 
-#### Primary Root Cause 4: Missing Process-Level Error Handlers
+- **Package Management**: `existing-projects-qa-test/package.json` (lines 1-11)
+  - Line 2: Package name "hello_world" - PRESERVE
+  - Line 5: Main entry point "index.js" - CONSIDER updating to "server.js"
+  - Lines 6-8: Scripts section - UPDATE to add Express-specific commands
+  - Missing dependencies object - ADD with Express.js
 
-**Located in:** Nowhere in server.js
+- **Documentation Integration**: `existing-projects-qa-test/blitzy/documentation/*.md`
+  - Project Guide: Update code examples, deployment commands, verification tests
+  - Technical Specifications: Update Agent Action Plan, dependency inventory, scope boundaries
 
-**Triggered by:** Uncaught exceptions in asynchronous callbacks, unhandled Promise rejections, or errors in event handlers
+**Test Files to Update:**
 
-**Evidence:**
+No explicit test files exist in the current repository. The project uses manual verification via curl commands as documented in the Project Guide. Consideration should be given to:
+- Adding a test script to package.json for Express endpoint verification
+- Creating basic smoke tests for the two endpoints
 
-Process has no safety net for unhandled errors:
+**Configuration Files:**
 
-```bash
-# Verification commands:
-node -p "process.listenerCount('uncaughtException')"  # Output: 0
-node -p "process.listenerCount('unhandledRejection')" # Output: 0
-```
+- **Environment Configuration**: Currently handled via environment variables (HOST, PORT)
+  - No .env file exists - will remain unchanged
+  - Express.js will use the same environment variable pattern
 
-**Technical Mechanism:** Node.js emits 'uncaughtException' for synchronous errors and 'unhandledRejection' for Promise errors that reach the process level. Without handlers, default behavior logs to stderr and exits, causing service disruption.
+- **Build/Deployment Configuration**: No Dockerfile, docker-compose.yml, or CI/CD configs exist at root level
+  - Documentation references Docker and systemd examples
+  - These remain as documentation-only references
 
-#### Primary Root Cause 5: Missing Client Error Handler
+### 0.2.2 New File Requirements
 
-**Located in:** Nowhere in server.js
+**No new files are required for this feature addition.** All changes will be made to existing files within the `existing-projects-qa-test/` directory structure.
 
-**Triggered by:** Malformed HTTP requests, client socket errors, parse failures, or timeout conditions
+**Rationale:**
+- The existing `server.js` file will be modified to use Express.js instead of creating a new file
+- Express.js integration is accomplished through dependency addition and code refactoring
+- The project structure remains minimal and self-contained
+- No separate route files, middleware files, or configuration files are necessary for this simple two-endpoint server
 
-**Evidence:**
+**Optional Files for Future Enhancement** (Out of Scope for Current Feature):
+- `existing-projects-qa-test/routes/index.js` - If route organization becomes necessary with more endpoints
+- `existing-projects-qa-test/middleware/errorHandler.js` - If error handling middleware needs to be extracted
+- `existing-projects-qa-test/middleware/validation.js` - If request validation becomes more complex
+- `existing-projects-qa-test/test/server.test.js` - For automated testing (currently uses manual curl verification)
+- `existing-projects-qa-test/.env.example` - For documenting available environment variables
 
-Server instance has no clientError listener:
+## 0.3 Dependency Inventory
 
-```bash
-# Verification:
-node -e "const http = require('http'); const s = http.createServer(() => {}); console.log('clientError listeners:', s.listenerCount('clientError'))"
+### 0.3.1 Private and Public Packages
 
-#### Output:
-clientError listeners: 0
-```
+The following packages are relevant to this feature addition:
 
-**Technical Mechanism:** When clients send malformed requests or connection errors occur, the 'clientError' event is emitted. Without a handler, the server may leak sockets or fail to properly close connections.
+| Registry | Package Name | Version | Purpose | Installation Scope |
+|----------|-------------|---------|---------|-------------------|
+| npm (public) | express | ^4.21.2 | Fast, unopinionated, minimalist web framework for Node.js; provides routing, middleware, and HTTP utilities | Production dependency |
+| npm (public) | express | ^5.1.0 | Alternative: Latest Express.js with enhanced security and async support (requires careful migration) | Production dependency (alternative) |
+| Built-in | http | N/A (Node.js built-in) | Currently used; will be wrapped by Express.js (not removed, Express uses it internally) | N/A |
 
-#### Secondary Root Cause 6: No Input Validation
+**Selected Version Justification:**
 
-**Located in:** server.js, lines 7-9 (request handler)
+**Primary Recommendation: Express.js v4.21.2** (or latest v4.x)
+- Mature, stable, and battle-tested in production environments
+- Extensive documentation and community support
+- Simpler migration path from native http module
+- Compatible with Node.js v20.19.5 (current runtime)
+- Semantic versioning with caret (^) allows patch and minor updates
 
-**Triggered by:** Edge cases where req.method or req.url are undefined or malformed
+**Alternative Option: Express.js v5.1.0**
+- Latest version with enhanced features and security
+- Requires Node.js v18+ (compatible with current v20.19.5)
+- Native async/await error handling in middleware
+- May require additional migration considerations for deprecated APIs
+- Suitable if project wants cutting-edge features
 
-**Evidence:**
+**Transitive Dependencies** (automatically installed with Express v4.21.2):
+- body-parser: Request body parsing middleware
+- cookie-parser: Cookie parsing (if using cookies)
+- debug: Debugging utility
+- serve-static: Static file serving (if needed)
+- And ~30 other transitive dependencies
 
-Request handler directly accesses request properties without validation:
+**Note on Zero-Dependency Policy:**
+The original project maintained a strict zero-dependency policy documented in `blitzy/documentation/Technical Specifications.md`. This constraint must be explicitly relaxed for this feature. The updated policy should state: "Zero external dependencies except for the Express.js framework and its required transitive dependencies for web application functionality."
 
-```javascript
-// Current vulnerable code at lines 7-9:
-res.statusCode = 200;
-res.setHeader('Content-Type', 'text/plain');
-res.end('Hello, World!\n');
-// No validation that req, res, req.method, or req.url are valid
-```
+### 0.3.2 Dependency Updates
 
-**Technical Mechanism:** Under certain error conditions or malicious requests, HTTP parser may produce requests with missing or invalid properties, causing downstream errors.
+**Import Updates Required:**
 
-#### Conclusion: Definitive Assessment
+The following file requires import statement modifications:
 
-These root causes are definitive because:
+**File: `existing-projects-qa-test/server.js`**
 
-- **Direct Evidence:** Repository analysis and testing confirm complete absence of all error handling mechanisms
-- **Reproducible Failures:** Created test cases demonstrate each failure mode reliably
-- **Industry Standards Violation:** Implementation violates Node.js production best practices documented in official guides and widely-adopted patterns
-- **Web Research Validation:** Multiple authoritative sources (Node.js documentation, Heroku best practices, PM2 guides, Stack Overflow solutions) confirm these as critical production requirements
-- **Comprehensive Scope:** Analysis examined all 15 lines of server.js and verified no error handling exists anywhere in the codebase
-
-## 0.3 Diagnostic Execution
-
-#### Code Examination Results
-
-**File analyzed:** server.js (relative to repository root)
-
-**Problematic code blocks:**
-
-Lines 1-15 (entire file) - Complete absence of error handling infrastructure
-
-**Specific failure points:**
-
-- **Line 6:** Request handler callback lacks try-catch wrapper, allowing exceptions to crash process
-- **Line 12:** server.listen() call has no error event handler, binding failures cause unhandled crashes
-- **Lines 1-15:** No process-level signal handlers (SIGTERM, SIGINT) for graceful shutdown
-- **Lines 1-15:** No process-level error handlers (uncaughtException, unhandledRejection)
-- **Lines 6-10:** Request handler has no input validation for req.method or req.url
-
-**Execution flow leading to bugs:**
-
-1. **Request Handler Crash Flow:**
-   - HTTP request arrives at server
-   - Request handler callback invoked (line 6)
-   - Exception thrown within handler
-   - No try-catch to contain error
-   - Exception bubbles to event loop
-   - Process terminates with exit code 1
-
-2. **Binding Failure Flow:**
-   - server.listen() called (line 12)
-   - Port already in use or permission denied
-   - 'error' event emitted by server instance
-   - No error listener registered
-   - Exception becomes unhandled
-   - Process crashes immediately
-
-3. **Signal Interruption Flow:**
-   - SIGTERM signal received (deployment scenario)
-   - No SIGTERM handler registered
-   - Default Node.js behavior: immediate exit
-   - Active HTTP connections severed
-   - Client receives connection reset errors
-
-#### Repository Analysis Findings
-
-| Tool Used | Command Executed | Finding | File:Line |
-|-----------|-----------------|---------|-----------|
-| read_file | Read server.js lines 1-15 | No try-catch blocks in request handler | server.js:6-10 |
-| read_file | Read server.js lines 1-15 | No server.on('error') handler | server.js:12-14 |
-| read_file | Read server.js lines 1-15 | No server.on('clientError') handler | Absent |
-| bash | `node -p "process.listenerCount('SIGTERM')"` | 0 listeners | N/A (runtime check) |
-| bash | `node -p "process.listenerCount('SIGINT')"` | 0 listeners | N/A (runtime check) |
-| bash | `node -p "process.listenerCount('uncaughtException')"` | 0 listeners | N/A (runtime check) |
-| bash | `node -p "process.listenerCount('unhandledRejection')"` | 0 listeners | N/A (runtime check) |
-| bash | Start server, trigger error | Process crash confirmed with exit code 1 | server.js:6-10 |
-| bash | Start server, send SIGTERM | Immediate termination without cleanup | server.js:12-14 |
-| get_source_folder_contents | Inspect repository structure | No error handling modules or utilities | Root directory |
-| read_file | Read package.json | No error handling dependencies | package.json:1-11 |
-
-#### Web Search Findings
-
-**Search queries executed:**
-
-1. "Node.js HTTP server error handling graceful shutdown best practices"
-2. "Node.js HTTP server uncaughtException unhandledRejection error handling"
-
-**Web sources referenced:**
-
-- <cite index="2-19,2-21">Node.js official practice: Handle SIGINT and SIGTERM signals to implement graceful shutdown that closes ongoing tasks before process exit</cite>
-- <cite index="3-31,3-32">Best practice: Handle all requests and close all resources processing data (database connections) and stop accepting new requests during shutdown</cite>
-- <cite index="12-2,12-17">Production requirement: Subscribe to process.on('uncaughtException', callback) to handle exceptions that can lead to unexpected termination or memory leaks</cite>
-- <cite index="12-9">Node.js provides unhandledRejection event mechanism for catching unhandled promise rejections</cite>
-- <cite index="15-16,15-17">Official guidance: It is not safe to resume normal operation after uncaughtException; use external monitor or proper cleanup before shutdown</cite>
-- <cite index="6-23,6-24">Graceful shutdown requirement: All incoming requests on new or old connections must be properly handled, and connections closed without generating client errors</cite>
-
-**Key findings and discoveries incorporated:**
-
-- <cite index="2-1,2-12">Graceful shutdown implementation pattern includes server.close() callback with forced shutdown timeout after 5 seconds if connections don't close naturally</cite>
-- <cite index="8-12,8-14">Production pattern: server.close() stops server from accepting new connections and finishes existing connections before shutdown</cite>
-- Request handler errors must be wrapped in try-catch blocks to prevent process crashes
-- Server-level errors (EADDRINUSE, EACCES) must be handled via server.on('error') event listener
-- Process-level handlers should perform cleanup and exit gracefully rather than continuing operation
-- <cite index="17-4,17-17">Industry best practice: Subscribe to process.on('unhandledRejection', callback) as a global error handler fallback</cite>
-
-#### Fix Verification Analysis
-
-**Steps followed to reproduce bug:**
-
-1. Created test harness (comprehensive_tests.js) to verify all failure modes
-2. Started original server.js and triggered request handler exception
-3. Confirmed process crash with exit code 1 and stack trace to stderr
-4. Verified absence of all error handlers using process.listenerCount()
-5. Tested signal handling by sending SIGTERM, confirmed abrupt termination
-6. Attempted to bind second server instance to same port, confirmed unhandled crash
-
-**Confirmation tests used to ensure bug was fixed:**
-
-Created server_fixed.js with all error handling and ran comprehensive test suite:
-
-1. **Normal Operation Test:** Server starts, responds to HTTP requests with 200 OK
-2. **Graceful Shutdown Test:** SIGTERM and SIGINT both trigger orderly shutdown
-3. **Error Handling Test:** Port conflicts handled gracefully with error messages
-4. **Request Processing Test:** Errors in request handler contained, server continues running
-5. **Input Validation Test:** Malformed requests return 400 Bad Request without crashing
-
-**Test execution commands:**
-
-```bash
-# Unit test suite
-node test_server.js
-
-#### Integration tests
-node test_fixed_server.js
-
-#### Manual verification
-node server_fixed.js &
-curl http://127.0.0.1:3000/
-kill -SIGTERM $!
-```
-
-**Boundary conditions and edge cases covered:**
-
-- **Empty/null request properties:** Validated req.method and req.url exist before processing
-- **Response already sent:** Checked res.headersSent before sending error responses
-- **Port already in use:** EADDRINUSE error code handled specifically
-- **Permission denied:** EACCES error code handled specifically
-- **Hung connections:** Shutdown timeout forces exit after 10 seconds
-- **Rapid signals:** Multiple SIGTERM/SIGINT handled without race conditions
-- **Socket writability:** Client errors check socket.writable before writing responses
-
-**Verification outcome:**
-
-- **Success:** 100% (All 5 unit tests passed)
-- **Confidence Level:** 99%
-
-The 1% uncertainty accounts for production edge cases not reproducible in test environment (network failures, system resource exhaustion under extreme load). All identified root causes have been addressed with industry-standard patterns validated by web research and confirmed functional through automated testing.
-
-## 0.4 Bug Fix Specification
-
-#### The Definitive Fix
-
-**Files to modify:** server.js (relative to repository root)
-
-**Current implementation at lines 1-15:**
-
+Current import:
 ```javascript
 const http = require('http');
-
-const hostname = '127.0.0.1';
-const port = 3000;
-
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, World!\n');
-});
-
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
-});
 ```
 
-**Required replacement at lines 1-15:**
-
-Replace entire file content with robust error-handling implementation shown in Change Instructions below.
-
-**This fixes the root causes by:**
-
-- **Request Handler Protection:** Wrapping handler logic in try-catch prevents exceptions from crashing the process
-- **Server Error Handling:** Adding server.on('error') catches binding failures and handles them gracefully
-- **Graceful Shutdown:** SIGTERM/SIGINT handlers drain connections before exit, preventing dropped requests
-- **Process-Level Safety Net:** uncaughtException and unhandledRejection handlers provide last-resort error recovery
-- **Client Error Management:** clientError handler prevents socket leaks from malformed requests
-- **Input Validation:** Request property checks prevent downstream null reference errors
-- **Resource Cleanup:** Timeout-based forced shutdown prevents hung processes
-
-#### Change Instructions
-
-**REPLACE entire file content (lines 1-15) with:**
-
+New import:
 ```javascript
-const http = require('http');
+const express = require('express');
+```
 
-// Configuration with environment variable support for production flexibility
-// Motive: Allow deployment-time configuration without code changes, following 12-factor app principles
+**Note:** The `http` module import will be removed as Express.js internally uses the http module. Direct access to http module is no longer needed since Express provides abstractions for all HTTP functionality.
+
+**No Wildcard Patterns Applicable:**
+This project has only one JavaScript source file (`server.js`), so wildcard patterns are not necessary. If the project grows, import updates would follow these patterns:
+- `existing-projects-qa-test/**/*.js` - All JavaScript files in the project
+- `existing-projects-qa-test/routes/**/*.js` - All route modules (if created)
+- `existing-projects-qa-test/middleware/**/*.js` - All middleware modules (if created)
+
+### 0.3.3 External Reference Updates
+
+**Configuration Files Requiring Updates:**
+
+| File Path | Current State | Required Update | Lines/Sections Affected |
+|-----------|--------------|-----------------|------------------------|
+| `existing-projects-qa-test/package.json` | No dependencies object | Add `"dependencies": { "express": "^4.21.2" }` | After line 10, before closing brace |
+| `existing-projects-qa-test/package.json` | `"main": "index.js"` | Optionally update to `"main": "server.js"` to match actual entry point | Line 5 |
+| `existing-projects-qa-test/package.json` | Test script placeholder | Optionally add `"start": "node server.js"` | Lines 6-8 (scripts section) |
+| `existing-projects-qa-test/package-lock.json` | Empty packages (zero dependencies) | Will be regenerated by `npm install express` command | Entire file |
+
+**Documentation Files Requiring Updates:**
+
+| File Path | Section | Required Update |
+|-----------|---------|-----------------|
+| `existing-projects-qa-test/blitzy/documentation/Project Guide.md` | Features Implemented (lines 76-100) | Add Express.js framework integration bullet point |
+| `existing-projects-qa-test/blitzy/documentation/Project Guide.md` | Code Examples (various) | Update code snippets to show Express.js syntax |
+| `existing-projects-qa-test/blitzy/documentation/Technical Specifications.md` | Section 0 (Agent Action Plan) | Update with new feature addition details |
+| `existing-projects-qa-test/blitzy/documentation/Technical Specifications.md` | Dependency policy section | Relax zero-dependency constraint to allow Express.js |
+| `existing-projects-qa-test/README.md` | Project description | Optionally update to mention Express.js (currently minimal) |
+
+**Build Files:**
+No build configuration files exist in the current project (no webpack.config.js, tsconfig.json, babel.config.js, etc.)
+
+**CI/CD Files:**
+No CI/CD pipeline files exist in the current project (no .github/workflows/*.yml, .gitlab-ci.yml, .circleci/config.yml, etc.)
+
+**Installation Command:**
+
+To install the Express.js dependency:
+```bash
+cd existing-projects-qa-test
+npm install express@^4.21.2 --save
+```
+
+This command will:
+- Download Express.js v4.21.2 (or latest v4.x patch version)
+- Add Express.js to the dependencies section of package.json
+- Update package-lock.json with all transitive dependencies
+- Create node_modules directory with installed packages
+
+## 0.4 Integration Analysis
+
+### 0.4.1 Existing Code Touchpoints
+
+**Direct Modifications Required:**
+
+**File: `existing-projects-qa-test/server.js`**
+
+| Location | Current Implementation | Required Modification | Integration Strategy |
+|----------|----------------------|----------------------|---------------------|
+| Lines 1-2 | `const http = require('http');` | Replace with Express initialization | Remove http import; add `const express = require('express');` and `const app = express();` |
+| Lines 5-6 | Environment variable configuration for hostname and port | Preserve as-is | Keep existing configuration; Express will use these variables in app.listen() |
+| Lines 10-38 | Request handler function with try-catch error boundary | Convert to Express routes and middleware | Extract into two route handlers: `app.get('/', ...)` and `app.get('/evening', ...)` |
+| Lines 10-24 | Request handler with error boundary | Convert to Express route handlers | Split into separate route handlers with Express error handling |
+| Lines 14-19 | Request validation for req.method and req.url | Convert to Express middleware | Create validation middleware or rely on Express built-in request validation |
+| Lines 21-24 | Normal request processing returning "Hello, World!" | Convert to Express route handler | Implement as `app.get('/', (req, res) => { res.status(200).set('Content-Type', 'text/plain').send('Hello, World!\n'); })` |
+| Lines 25-37 | Error handling in request callback | Convert to Express error middleware | Implement as 4-parameter error handler: `app.use((err, req, res, next) => { ... })` |
+| Lines 40-54 | Server error event handler (EADDRINUSE, EACCES) | Adapt to Express server instance | Attach to server returned by app.listen(): `const server = app.listen(...); server.on('error', ...)` |
+| Lines 56-68 | Client error handler | Preserve on Express server | Attach to server instance: `server.on('clientError', ...)` |
+| Lines 70-88 | Graceful shutdown function | Adapt to use Express server reference | Update server.close() to use Express server instance; logic remains the same |
+| Lines 90-137 | Process signal and error handlers | Preserve unchanged | These are process-level handlers; Express doesn't affect them |
+| Lines 139-143 | Server listen call with http.createServer | Convert to Express app.listen | Replace with `const server = app.listen(port, hostname, () => { ... })` |
+
+**File: `existing-projects-qa-test/package.json`**
+
+| Location | Current State | Required Modification |
+|----------|--------------|----------------------|
+| Lines 1-11 | Complete file with no dependencies | Add dependencies object with Express.js after line 10 |
+| Line 5 | `"main": "index.js"` | Optionally update to `"main": "server.js"` |
+| Lines 6-8 | Scripts with failing test placeholder | Optionally add `"start": "node server.js"` script |
+
+### 0.4.2 Dependency Injections
+
+**No explicit dependency injection framework is used in this project.** The application uses simple Node.js module imports and direct instantiation.
+
+**Integration Pattern:**
+- Express app instance will be created at the module level in server.js
+- Middleware will be registered directly on the app instance using app.use()
+- Route handlers will be registered using app.get(), app.post(), etc.
+- Server instance will be stored in a module-level variable for graceful shutdown access
+
+**Pseudo-code for Integration:**
+```javascript
+// Module-level dependencies
+const express = require('express');
+const app = express();
+
+// Configuration (existing)
 const hostname = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
 
-// Request handler with proper error handling
-// Motive: Prevent request processing errors from crashing the entire server process
-const server = http.createServer((req, res) => {
-  try {
-    // Input validation: Ensure request method and URL are present
-    // Motive: Prevent null reference errors when accessing request properties
-    if (!req.method || !req.url) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Bad Request: Invalid request format\n');
-      return;
-    }
+// Middleware registration
+app.use(express.json());  // If JSON parsing needed
+app.use(requestValidationMiddleware);  // Custom validation
 
-    // Normal request processing
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/plain');
-    res.end('Hello, World!\n');
-  } catch (error) {
-    // Handle any synchronous errors in request processing
-    // Motive: Contain errors within request scope, log for debugging, return 500 to client
-    console.error('Error processing request:', error);
-    
-    // Only send error response if headers haven't been sent
-    // Motive: Prevent "Cannot set headers after they are sent" errors
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Internal Server Error\n');
-    }
-  }
-});
+// Route registration
+app.get('/', helloWorldHandler);
+app.get('/evening', goodEveningHandler);
 
-// Handle server-level errors (e.g., port already in use, permission denied)
-// Motive: Prevent unhandled server binding failures from crashing process with unclear error messages
-server.on('error', (error) => {
-  console.error('Server error:', error.message);
-  
-  // Provide specific guidance for common errors
-  // Motive: Help operators quickly identify and resolve deployment issues
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is already in use`);
-  } else if (error.code === 'EACCES') {
-    console.error(`Permission denied to bind to port ${port}`);
-  }
-  
-  process.exit(1);
-});
+// Error handling middleware (registered last)
+app.use(errorHandlerMiddleware);
 
-// Handle client connection errors
-// Motive: Prevent malformed requests or client errors from leaking sockets or crashing server
-server.on('clientError', (error, socket) => {
-  console.error('Client connection error:', error.message);
-  
-  // Send HTTP 400 response if socket is still writable
-  // Motive: Inform client of error condition before closing connection
-  if (socket.writable) {
-    socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-  } else {
-    socket.destroy();
-  }
-});
-
-// Graceful shutdown function with timeout
-// Motive: Ensure in-flight requests complete before shutdown, preventing client errors during deployments
-function gracefulShutdown(signal) {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-  
-  // Stop accepting new connections
-  // Motive: Drain existing connections while rejecting new ones
-  server.close(() => {
-    console.log('Server closed. All connections finished.');
-    process.exit(0);
-  });
-  
-  // Force shutdown after timeout if connections don't close naturally
-  // Motive: Prevent hung processes if connections don't drain within reasonable time
-  setTimeout(() => {
-    console.error('Forcing shutdown after timeout');
-    process.exit(1);
-  }, 10000); // 10 second timeout
-}
-
-// Handle graceful shutdown signals
-// Motive: Support standard Unix process management (kill, systemd, Docker, Kubernetes)
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Handle uncaught exceptions (last resort error handler)
-// Motive: Log unexpected errors and attempt graceful shutdown instead of silent crash
-process.on('uncaughtException', (error) => {
-  console.error('UNCAUGHT EXCEPTION! Shutting down...');
-  console.error('Error:', error.name, error.message);
-  console.error('Stack:', error.stack);
-  
-  // Attempt graceful shutdown, then force exit
-  // Motive: Per Node.js best practices, do not continue after uncaught exception
-  server.close(() => {
-    console.log('Server closed due to uncaught exception');
-    process.exit(1);
-  });
-  
-  // Force exit if server doesn't close in time
-  // Motive: Prevent hung process in corrupted state
-  setTimeout(() => {
-    console.error('Forcing exit after uncaught exception');
-    process.exit(1);
-  }, 5000);
-});
-
-// Handle unhandled promise rejections
-// Motive: Catch async errors that slip through without .catch() handlers
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('UNHANDLED PROMISE REJECTION! Shutting down...');
-  console.error('Rejection at:', promise);
-  console.error('Reason:', reason);
-  
-  // Treat unhandled rejections as critical errors
-  // Motive: Prevent silent failures and data corruption from unhandled async errors
-  server.close(() => {
-    console.log('Server closed due to unhandled rejection');
-    process.exit(1);
-  });
-  
-  // Force exit if server doesn't close in time
-  // Motive: Ensure process doesn't hang in undefined state
-  setTimeout(() => {
-    console.error('Forcing exit after unhandled rejection');
-    process.exit(1);
-  }, 5000);
-});
-
-// Start the server
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
-  console.log('Press Ctrl+C to stop the server');
-});
+// Server instantiation
+const server = app.listen(port, hostname, listenerCallback);
 ```
 
-#### Fix Validation
-
-**Test command to verify fix:**
-
-```bash
-# Run comprehensive test suite
-node test_server.js
-```
-
-**Expected output after fix:**
-
-```
-=== Unit Tests for Robust server.js ===
-
-✓ Server should start and listen on specified port
-✓ Server should respond to HTTP GET requests
-✓ Server should handle SIGTERM gracefully
-✓ Server should handle SIGINT gracefully
-✓ Server should handle port conflicts
-
-=== Test Summary ===
-Tests run: 5
-Tests passed: 5
-Tests failed: 0
-
-✓ All tests passed!
-```
-
-**Confirmation method:**
-
-1. **Verify Normal Operation:**
-   ```bash
-   node server.js &
-   curl http://127.0.0.1:3000/
-   # Expected: "Hello, World!" response
-   ```
-
-2. **Verify Graceful Shutdown:**
-   ```bash
-   node server.js &
-   PID=$!
-   kill -SIGTERM $PID
-   # Expected: "SIGTERM received. Starting graceful shutdown..." message
-   ```
-
-3. **Verify Error Handling:**
-   ```bash
-   node server.js &
-   node server.js &
-   # Expected: Second instance logs "Port 3000 is already in use" and exits cleanly
-   ```
-
-4. **Verify Request Error Containment:**
-   Modify request handler to throw error, send request, verify server continues running
-
-All validation confirms zero process crashes, proper connection handling, and graceful shutdown behavior under all tested conditions.
-
-## 0.5 Scope Boundaries
-
-#### Changes Required (EXHAUSTIVE LIST)
-
-**File 1: server.js** - Lines 1-15 (entire file replacement)
-
-**Specific changes:**
-- Add environment variable support for hostname and port configuration (lines 3-6)
-- Wrap request handler logic in try-catch block (lines 10-35)
-- Add input validation for req.method and req.url (lines 12-17)
-- Add error response handling with headersSent check (lines 26-32)
-- Add server.on('error') handler for binding failures (lines 38-50)
-- Add server.on('clientError') handler for malformed requests (lines 53-64)
-- Add gracefulShutdown function with connection draining and timeout (lines 67-80)
-- Add SIGTERM signal handler (line 84)
-- Add SIGINT signal handler (line 85)
-- Add process.on('uncaughtException') handler with graceful shutdown (lines 88-104)
-- Add process.on('unhandledRejection') handler with graceful shutdown (lines 107-123)
-- Add informative startup logging (lines 127-129)
-
-**Rationale for changes:**
-Each change directly addresses one or more identified root causes:
-- Request handler try-catch prevents process crashes from handler exceptions
-- Server error handlers prevent crashes from binding failures
-- Signal handlers enable graceful shutdowns during deployments
-- Process-level handlers provide last-resort error recovery
-- Input validation prevents null reference errors
-- Client error handler prevents socket leaks
-
-**No other files require modification.**
-
-The repository contains only:
-- README.md (documentation, not executable)
-- package.json (no dependencies to update)
-- package-lock.json (no dependencies to update)
-- server.js (the only executable code file)
-
-#### Explicitly Excluded
-
-**Do not modify:**
-
-- **README.md:** File explicitly states "Do not modify this repository" - this is a preserved test scaffold
-- **package.json:** Zero dependencies means no dependency updates needed; test script intentionally fails by design
-- **package-lock.json:** No dependencies means lockfile needs no changes
-- **.gitignore, .github/, etc.:** No version control or CI configuration files present to modify
-
-**Do not refactor:**
-
-- **Request handler business logic:** The "Hello, World!" response is the intended functionality; only error handling is added around it
-- **Port and hostname defaults:** Values 127.0.0.1:3000 are appropriate for local development; environment variable support provides production flexibility without changing defaults
-- **Module structure:** Single-file server is appropriate for this minimal demo; no need to split into modules
-- **Logging approach:** console.log/console.error are sufficient for this simple server; no need to add logging libraries
-
-**Do not add:**
-
-- **Testing frameworks:** While test files were created during fix development, they are diagnostic tools, not production requirements
-- **Additional dependencies:** No npm packages (express, winston, http-graceful-shutdown, etc.) should be added; fixes use only Node.js built-in capabilities
-- **Configuration files:** No .env, config.js, or similar files needed; environment variables are read directly via process.env
-- **Advanced features:** No routing, middleware, request parsing, authentication, or other features beyond the minimal HTTP server scope
-- **Documentation updates:** README.md preservation notice should remain unchanged
-- **Production deployment files:** No Dockerfile, docker-compose.yml, ecosystem.config.js, or other deployment manifests needed
-
-**Scope justification:**
-
-This fix focuses exclusively on making the existing minimal HTTP server production-ready through error handling, input validation, and graceful shutdown. All changes use Node.js built-in capabilities and follow patterns from official Node.js documentation and industry best practices. The fix maintains the project's identity as a "deliberately minimal" Node.js demonstration while addressing critical production vulnerabilities.
-
-## 0.6 Verification Protocol
-
-#### Bug Elimination Confirmation
-
-**Execute comprehensive test suite:**
-
-```bash
-# Create and run unit tests
-node test_server.js
-```
-
-**Verify output matches:**
-
-```
-=== Unit Tests for Robust server.js ===
-
-✓ Server should start and listen on specified port
-✓ Server should respond to HTTP GET requests
-✓ Server should handle SIGTERM gracefully
-✓ Server should handle SIGINT gracefully
-✓ Server should handle port conflicts
-
-=== Test Summary ===
-Tests run: 5
-Tests passed: 5
-Tests failed: 0
-
-✓ All tests passed!
-```
-
-**Confirm error no longer appears in:** Terminal output / process logs
-
-Original error (process crash on unhandled exception) should be completely eliminated. Server should continue running after request errors and shut down gracefully on signals.
-
-**Validate functionality with integration tests:**
-
-```bash
-# Test 1: Normal HTTP operation
-node server.js &
-SERVER_PID=$!
-sleep 1
-RESPONSE=$(curl -s http://127.0.0.1:3000/)
-echo "Response: $RESPONSE"
-kill $SERVER_PID
-# Expected: Response contains "Hello, World!"
-
-#### Test 2: Graceful shutdown with active connection
-node server.js &
-SERVER_PID=$!
-sleep 1
-curl http://127.0.0.1:3000/ &
-CURL_PID=$!
-sleep 0.5
-kill -SIGTERM $SERVER_PID
-wait $CURL_PID
-#### Expected: curl completes successfully, server logs "graceful shutdown"
-
-#### Test 3: Port conflict handling
-node server.js &
-SERVER1_PID=$!
-sleep 1
-node server.js &
-SERVER2_PID=$!
-sleep 1
-kill $SERVER1_PID 2>/dev/null
-kill $SERVER2_PID 2>/dev/null
-#### Expected: Second server logs "Port 3000 is already in use" and exits
-
-#### Test 4: Environment variable configuration
-PORT=8080 HOST=0.0.0.0 node server.js &
-SERVER_PID=$!
-sleep 1
-RESPONSE=$(curl -s http://0.0.0.0:8080/)
-echo "Response: $RESPONSE"
-kill $SERVER_PID
-#### Expected: Server binds to 0.0.0.0:8080 and responds correctly
-```
-
-#### Regression Check
-
-**Run existing test suite:**
-
-```bash
-# Original project has no test suite, but we can verify basic functionality
-npm test
-# Expected: Still fails with "Error: no test specified" - intentional per package.json
-```
-
-**Verify unchanged behavior in:** Core HTTP request/response functionality
-
-```bash
-# Test original behavior is preserved
-node server.js &
-PID=$!
-sleep 1
-
-#### Test 1: GET request returns Hello World
-RESPONSE=$(curl -s http://127.0.0.1:3000/)
-if [ "$RESPONSE" = "Hello, World!" ]; then
-  echo "✓ Original response preserved"
-else
-  echo "✗ Response changed unexpectedly"
-fi
-
-#### Test 2: Default port and hostname unchanged
-OUTPUT=$(node -e "require('./server.js')" 2>&1 | grep "127.0.0.1:3000")
-if [ -n "$OUTPUT" ]; then
-  echo "✓ Default configuration preserved"
-else
-  echo "✗ Default configuration changed"
-fi
-
-kill $PID
-```
-
-**Confirm performance metrics:**
-
-```bash
-# Benchmark response time (should be unchanged)
-node server.js &
-PID=$!
-sleep 1
-
-#### Run 100 requests and measure average time
-for i in {1..100}; do
-  curl -s -o /dev/null -w "%{time_total}\n" http://127.0.0.1:3000/
-done | awk '{sum+=$1; count++} END {print "Average: " sum/count " seconds"}'
-
-kill $PID
-# Expected: Response time should be similar to original (< 10ms average)
-# Error handling overhead should be negligible
-```
-
-#### Verification Checklist
-
-- [x] Server starts successfully on default port 3000
-- [x] Server responds to HTTP GET requests with "Hello, World!"
-- [x] Request handler errors do not crash the process
-- [x] Invalid requests return 400 Bad Request
-- [x] Server errors (port conflict) are handled gracefully
-- [x] SIGTERM triggers graceful shutdown
-- [x] SIGINT (Ctrl+C) triggers graceful shutdown
-- [x] Graceful shutdown waits for active connections
-- [x] Forceful shutdown occurs after timeout
-- [x] uncaughtException handler logs and shuts down gracefully
-- [x] unhandledRejection handler logs and shuts down gracefully
-- [x] Client errors are handled without socket leaks
-- [x] Environment variables (PORT, HOST) are supported
-- [x] Original functionality is preserved
-- [x] No performance degradation introduced
-
-#### Success Criteria
-
-All verification steps must pass with:
-- Zero process crashes during normal operation
-- Zero connection drops during graceful shutdown (when initiated during idle state)
-- Proper error messages logged for all error conditions
-- Clean exit codes (0 for graceful shutdown, 1 for error conditions)
-- Original "Hello, World!" response preserved for valid requests
-- Response times within 10% of original implementation
-
-**Final Validation Command:**
-
-```bash
-# One-line comprehensive check
-node server.js & PID=$!; sleep 1; \
-curl -s http://127.0.0.1:3000/ | grep -q "Hello, World" && echo "✓ Response OK" || echo "✗ Response FAIL"; \
-kill -SIGTERM $PID && wait $PID 2>/dev/null && echo "✓ Graceful shutdown OK" || echo "✗ Shutdown FAIL"
-```
-
-Expected output:
-```
-✓ Response OK
-✓ Graceful shutdown OK
-```
-
-## 0.7 Execution Requirements
-
-#### Research Completeness Checklist
-
-- ✓ **Repository structure fully mapped:** Analyzed root folder containing 4 files (README.md, package.json, package-lock.json, server.js)
-- ✓ **All related files examined with retrieval tools:** Used get_source_folder_contents and read_file to inspect all files
-- ✓ **Bash analysis completed for patterns/dependencies:** Executed process.listenerCount() checks, server testing, and error reproduction commands
-- ✓ **Root cause definitively identified with evidence:** Documented 6 primary/secondary root causes with specific file locations and triggering conditions
-- ✓ **Single solution determined and validated:** Created comprehensive fix with try-catch, error handlers, signal handlers, and graceful shutdown
-- ✓ **Web research conducted:** Searched Node.js best practices, analyzed 10+ authoritative sources including Node.js official docs, Heroku guides, Stack Overflow, and production patterns
-- ✓ **Test coverage created:** Developed comprehensive test suite covering all error scenarios, signal handling, and edge cases
-- ✓ **Fix verification completed:** Ran 5 unit tests, all passed with 100% success rate
-
-#### Fix Implementation Rules
-
-**Rule 1: Make the exact specified change only**
-
-Replace lines 1-15 of server.js with the complete robust implementation provided in section 0.4. No deviations, additions, or omissions permitted.
-
-**Rule 2: Zero modifications outside the bug fix**
-
-- Do NOT modify README.md (preservation notice)
-- Do NOT modify package.json (intentional test failure in scripts)
-- Do NOT modify package-lock.json (zero dependencies)
-- Do NOT add new files (no test files, config files, or deployment files)
-- Do NOT install dependencies (solution uses only Node.js built-ins)
-
-**Rule 3: No interpretation or improvement of working code**
-
-- Do NOT change the "Hello, World!" response text
-- Do NOT add routing, middleware, or additional endpoints
-- Do NOT add request parsing (body, query params, etc.)
-- Do NOT change default hostname (127.0.0.1) or port (3000)
-- Do NOT add logging libraries or external modules
-
-**Rule 4: Preserve all whitespace and formatting except where changed**
-
-Original file uses:
-- 2-space indentation
-- LF line endings
-- No trailing whitespace
-
-Replacement code follows same conventions:
-- 2-space indentation throughout
-- Consistent blank lines between logical sections
-- Comments use // style, placed above code they document
-
-#### Implementation Steps
-
-**Step 1: Backup original file**
-
-```bash
-cp server.js server.js.backup
-```
-
-**Step 2: Apply fix**
-
-```bash
-# Replace entire file content with fixed version
-cat > server.js << 'EOF'
-[Insert complete fixed code from section 0.4]
-EOF
-```
-
-**Step 3: Verify syntax**
-
-```bash
-node -c server.js
-# Expected: No output (syntax valid)
-```
-
-**Step 4: Run verification**
-
-```bash
-node test_server.js
-# Expected: All 5 tests pass
-```
-
-**Step 5: Manual smoke test**
-
-```bash
-node server.js &
-PID=$!
-sleep 1
-curl http://127.0.0.1:3000/
-kill -SIGTERM $PID
-# Expected: "Hello, World!" response and graceful shutdown
-```
-
-#### Code Quality Standards
-
-**Maintained standards:**
-
-- **Clarity:** Every error handler includes descriptive console.error messages explaining what happened
-- **Comments:** All non-obvious code sections include explanatory comments with "Motive:" explaining the reasoning
-- **Error specificity:** EADDRINUSE and EACCES errors have specific handling with helpful messages
-- **Defensive coding:** Check res.headersSent before sending response, check socket.writable before writing
-- **Timeout safety:** All shutdown handlers include forced exit timeouts to prevent hung processes
-- **Industry alignment:** Follows patterns from Node.js documentation, PM2 best practices, and Heroku production guides
-
-**Not changed:**
-
-- **Simplicity:** Remains single-file, zero-dependency implementation
-- **Scope:** Still a minimal HTTP server demonstration
-- **Purpose:** Maintains "Hello world in Node.js" identity per package.json
-
-#### Compatibility Requirements
-
-**Node.js version:** Compatible with Node.js v20.x (tested) and all LTS versions 14.x+
-
-**Platform:** Cross-platform (Linux, macOS, Windows) - uses only cross-platform Node.js APIs
-
-**Dependencies:** Zero external dependencies - uses only built-in modules:
-- http (standard library)
-- process (global object)
-
-**Breaking changes:** None - all changes are additive (error handling) or behavioral improvements (graceful shutdown)
-
-#### Deployment Considerations
-
-**Environment variables supported:**
-
-- `HOST`: Bind address (default: 127.0.0.1)
-- `PORT`: Listen port (default: 3000)
-
-**Signal handling:** Compatible with:
-- systemd (SIGTERM on stop)
-- Docker (SIGTERM on stop)
-- Kubernetes (SIGTERM on pod termination)
-- PM2 (SIGINT on reload)
-- Forever (SIGTERM on stop)
-- Manual ctrl+C (SIGINT)
-
-**Production readiness improvements:**
-
-- Prevents service disruption from request handler errors
-- Enables zero-downtime deployments via graceful shutdown
-- Provides clear error messages for operational debugging
-- Handles common deployment issues (port conflicts, permissions)
-
-#### Success Criteria Summary
-
-Implementation is complete and correct when:
-
-1. All 5 automated tests pass
-2. Server starts and responds to HTTP requests
-3. SIGTERM and SIGINT trigger graceful shutdowns
-4. Request errors do not crash the process
-5. Port conflicts are handled with clear error messages
-6. Original "Hello, World!" functionality is preserved
-7. No external dependencies added
-8. No files modified except server.js
-9. Code follows existing formatting conventions
-10. All comments explain the "why" behind error handling
-
-#### Final Checklist
-
-- [ ] server.js replaced with robust implementation
-- [ ] Syntax validated with `node -c server.js`
-- [ ] All 5 unit tests pass
-- [ ] Manual smoke test passes (start, curl, graceful shutdown)
-- [ ] No other files modified
-- [ ] No dependencies added to package.json
-- [ ] Code formatting matches original style
-- [ ] All error handlers have descriptive logging
-- [ ] Timeout values appropriate (10s shutdown, 5s forced exit)
-- [ ] Environment variable support tested
-
-Upon completion of all checklist items, the bug fix is production-ready and can be deployed with confidence that all identified issues are resolved.
-
+### 0.4.3 Database/Schema Updates
+
+**No database or schema updates required.** This project is a stateless HTTP server with no database connectivity.
+
+**Current State:**
+- No database models exist
+- No ORM or database client libraries present
+- No migrations directory
+- No schema definitions
+
+**Future Considerations** (Out of Scope):
+If the project grows to include database functionality:
+- Express.js integrates well with database ORMs like Sequelize, Mongoose, TypeORM
+- Database connection initialization would occur before app.listen()
+- Connection pooling would be configured based on environment variables
+- Graceful shutdown would need to include database connection cleanup
+
+### 0.4.4 Middleware Integration Points
+
+**Proposed Middleware Stack** (in order of execution):
+
+1. **Request Logging Middleware** (optional, currently handled by console.log statements)
+   - Purpose: Log incoming requests for debugging
+   - Location: Immediately after Express app creation
+   - Implementation: Could use morgan package or custom middleware
+
+2. **Request Validation Middleware** (adapting existing validation)
+   - Purpose: Validate basic request properties before route handling
+   - Location: Before route handlers
+   - Implementation: Custom middleware adapting lines 14-19 logic
+
+3. **Route Handlers** (application endpoints)
+   - GET / - Hello World endpoint (existing)
+   - GET /evening - Good Evening endpoint (new)
+
+4. **404 Handler** (implicit in Express, can be customized)
+   - Purpose: Handle unmatched routes
+   - Location: After all route handlers
+   - Implementation: `app.use((req, res) => { res.status(404).send('Not Found'); })`
+
+5. **Error Handling Middleware** (adapting existing error boundaries)
+   - Purpose: Catch and handle all errors from routes and middleware
+   - Location: Last middleware in the stack
+   - Implementation: 4-parameter function `(err, req, res, next) => { ... }`
+
+**Server Event Listeners** (attached to underlying http.Server):
+- 'error' event - Server-level errors (EADDRINUSE, EACCES)
+- 'clientError' event - Client connection errors and malformed requests
+
+**Process Event Listeners** (unchanged):
+- 'SIGTERM' - Graceful shutdown signal
+- 'SIGINT' - Interrupt signal (Ctrl+C)
+- 'uncaughtException' - Last-resort error handler
+- 'unhandledRejection' - Unhandled promise rejections
+
+## 0.5 Technical Implementation
+
+### 0.5.1 File-by-File Execution Plan
+
+**CRITICAL: Every file listed here MUST be created or modified as specified.**
+
+#### Group 1 - Dependency Management
+
+**MODIFY: `existing-projects-qa-test/package.json`**
+- **Purpose**: Add Express.js framework as a production dependency
+- **Specific Changes**:
+  - Add dependencies object after line 10: `"dependencies": { "express": "^4.21.2" }`
+  - Optionally update main field (line 5): Change `"main": "index.js"` to `"main": "server.js"`
+  - Optionally add start script (lines 6-8): Add `"start": "node server.js"` to scripts
+- **Validation**: Run `npm install` successfully; verify Express appears in dependencies
+
+**AUTO-UPDATE: `existing-projects-qa-test/package-lock.json`**
+- **Purpose**: Lock Express.js and transitive dependency versions for reproducible builds
+- **Specific Changes**: Will be automatically regenerated by `npm install` command
+- **Expected Result**: File grows from ~15 lines to ~500+ lines with full dependency tree
+- **Validation**: Verify lockfileVersion 3 maintained; packages object contains express and ~30 transitive dependencies
+
+#### Group 2 - Core Application Logic
+
+**MODIFY: `existing-projects-qa-test/server.js`**
+- **Purpose**: Migrate from native http module to Express.js framework; add new endpoint
+- **Specific Changes** (detailed line-by-line):
+
+  **Section 1: Imports and Initialization (Lines 1-6)**
+  - Remove: `const http = require('http');` (line 1)
+  - Add: `const express = require('express');` (line 1)
+  - Add: `const app = express();` (line 2)
+  - Preserve: Lines 5-6 (hostname and port configuration) unchanged
+
+  **Section 2: Middleware Registration (New, after line 6)**
+  - Add request validation middleware if needed
+  - Add any necessary body parsers (express.json(), express.urlencoded())
+  - Note: For simple text responses, minimal middleware needed
+
+  **Section 3: Route Handlers (Replace lines 10-38)**
+  - Remove entire request handler function (lines 10-38)
+  - Add Route 1 - Hello World endpoint:
+    ```javascript
+    app.get('/', (req, res) => {
+      res.status(200).set('Content-Type', 'text/plain').send('Hello, World!\n');
+    });
+    ```
+  - Add Route 2 - Good Evening endpoint (NEW):
+    ```javascript
+    app.get('/evening', (req, res) => {
+      res.status(200).set('Content-Type', 'text/plain').send('Good evening\n');
+    });
+    ```
+
+  **Section 4: Error Handling Middleware (Replace lines 25-37)**
+  - Remove try-catch from request handler (converted to middleware)
+  - Add Express error handler (4-parameter function):
+    ```javascript
+    app.use((err, req, res, next) => {
+      console.error('Error processing request:', err);
+      if (!res.headersSent) {
+        res.status(500).set('Content-Type', 'text/plain').send('Internal Server Error\n');
+      }
+    });
+    ```
+
+  **Section 5: Server Instantiation (Replace lines 139-143)**
+  - Remove: `server.listen(port, hostname, ...)` call
+  - Add: `const server = app.listen(port, hostname, () => { ... });`
+  - Preserve: Console log statements in callback
+
+  **Section 6: Server Event Handlers (Lines 40-68, adapt to new server)**
+  - Preserve: All server.on('error') logic (lines 40-54)
+  - Preserve: All server.on('clientError') logic (lines 56-68)
+  - Update: Server reference is now returned from app.listen()
+
+  **Section 7: Graceful Shutdown (Lines 70-88, minimal changes)**
+  - Preserve: gracefulShutdown function unchanged
+  - Update: Server reference is now Express server instance
+  - Note: server.close() works identically with Express
+
+  **Section 8: Process Handlers (Lines 90-137, no changes)**
+  - Preserve: All SIGTERM/SIGINT handlers (lines 92-93)
+  - Preserve: All uncaughtException handler (lines 97-115)
+  - Preserve: All unhandledRejection handler (lines 119-137)
+  - Rationale: Process-level handlers are framework-independent
+
+- **Validation**: Server starts without errors; responds to GET / and GET /evening
+
+#### Group 3 - Documentation Updates
+
+**MODIFY: `existing-projects-qa-test/blitzy/documentation/Project Guide.md`**
+- **Purpose**: Update operational documentation to reflect Express.js framework
+- **Specific Changes**:
+  - Update "Features Implemented" section (~line 76): Add Express.js integration bullet
+  - Update code examples to show Express.js syntax where applicable
+  - Update dependency policy discussion to allow Express.js
+  - Add new endpoint documentation for /evening route
+- **Validation**: Documentation accurately reflects new implementation
+
+**MODIFY: `existing-projects-qa-test/blitzy/documentation/Technical Specifications.md`**
+- **Purpose**: Update technical specifications with new feature implementation details
+- **Specific Changes**:
+  - Update Section 0 (Agent Action Plan) with this feature addition
+  - Update dependency inventory to list Express.js
+  - Update scope boundaries to include Express.js framework
+  - Revise zero-dependency policy constraint
+- **Validation**: Technical specifications match actual implementation
+
+**OPTIONAL-MODIFY: `existing-projects-qa-test/README.md`**
+- **Purpose**: Update project description if needed
+- **Specific Changes**: Currently minimal ("Do not touch!" warning); may update to mention Express.js
+- **Priority**: Low - current README serves its purpose
+
+#### Group 4 - Verification and Testing
+
+**NO NEW TEST FILES CREATED** (following project's current approach)
+- Current verification method: Manual curl commands
+- Verification commands:
+  ```bash
+  curl http://localhost:3000/         # Should return "Hello, World!"
+  curl http://localhost:3000/evening  # Should return "Good evening"
+  ```
+
+### 0.5.2 Implementation Approach per File
+
+**Phase 1: Establish Foundation (Dependency Installation)**
+1. Navigate to project directory: `cd existing-projects-qa-test`
+2. Add Express.js dependency to package.json manually or via npm
+3. Run `npm install express@^4.21.2 --save` to install Express and generate lockfile
+4. Verify node_modules directory created with Express.js and dependencies
+5. Confirm package.json and package-lock.json updated correctly
+
+**Phase 2: Integrate Framework (Core Server Migration)**
+1. Open `server.js` for editing
+2. Replace http module import with Express initialization (lines 1-2)
+3. Preserve environment variable configuration (lines 5-6)
+4. Convert request handler to Express route handlers:
+   - Create GET / route for "Hello, World!" response
+   - Create GET /evening route for "Good evening" response
+5. Convert error handling to Express error middleware (4-parameter function)
+6. Update server instantiation to use app.listen() instead of http.createServer
+7. Preserve all server event listeners (error, clientError) on new server instance
+8. Preserve all process event listeners (SIGTERM, SIGINT, uncaughtException, unhandledRejection)
+9. Maintain gracefulShutdown function with updated server reference
+
+**Phase 3: Ensure Quality (Testing and Verification)**
+1. Start server: `node existing-projects-qa-test/server.js`
+2. Verify server starts without errors and logs startup message
+3. Test existing endpoint: `curl http://localhost:3000/`
+   - Expected: "Hello, World!" response with 200 status
+4. Test new endpoint: `curl http://localhost:3000/evening`
+   - Expected: "Good evening" response with 200 status
+5. Test graceful shutdown: Send SIGTERM signal
+   - Expected: Graceful shutdown message, connections drain, process exits cleanly
+6. Test error scenarios:
+   - Port conflict (start on already-used port) - Should log EADDRINUSE error
+   - Invalid requests - Should be handled without server crash
+
+**Phase 4: Document Changes (Documentation Updates)**
+1. Update `blitzy/documentation/Project Guide.md`:
+   - Add Express.js to features implemented list
+   - Update code examples to show Express syntax
+   - Document new /evening endpoint
+2. Update `blitzy/documentation/Technical Specifications.md`:
+   - Update Section 0 Agent Action Plan (this document)
+   - Update dependency policy to allow Express.js
+3. Optionally update README.md if project description needs refreshing
+
+**Implementation Timeline** (Sequential, not temporal):
+1. Dependency installation: First priority
+2. Core server migration: Second priority (blocks testing)
+3. Testing and verification: Third priority (validates implementation)
+4. Documentation updates: Fourth priority (records changes)
+
+## 0.6 Scope Boundaries
+
+### 0.6.1 Exhaustively In Scope
+
+The following files, components, and changes are explicitly within the scope of this feature addition:
+
+**Core Application Files:**
+- `existing-projects-qa-test/server.js` - Complete migration from http module to Express.js framework
+  - Lines 1-6: Import statements and configuration
+  - Lines 10-38: Request handling logic (convert to routes)
+  - Lines 40-68: Server event handlers (adapt to Express server)
+  - Lines 70-88: Graceful shutdown function (update server reference)
+  - Lines 90-143: Process handlers and server instantiation
+  - **New functionality**: Addition of GET /evening endpoint
+
+**Dependency Management Files:**
+- `existing-projects-qa-test/package.json` - Add Express.js to dependencies
+  - Line 10+: Add `"dependencies": { "express": "^4.21.2" }`
+  - Line 5 (optional): Update main field to "server.js"
+  - Lines 6-8 (optional): Add "start" script
+- `existing-projects-qa-test/package-lock.json` - Automatic regeneration with Express.js dependency tree
+  - Entire file will be regenerated by npm install
+
+**Documentation Files:**
+- `existing-projects-qa-test/blitzy/documentation/Project Guide.md`
+  - Features Implemented section (~lines 76-100)
+  - Code examples throughout document
+  - Dependency policy section
+  - Verification commands (if affected)
+- `existing-projects-qa-test/blitzy/documentation/Technical Specifications.md`
+  - Section 0: Agent Action Plan (entire section)
+  - Dependency inventory sections
+  - Scope boundaries sections
+  - Zero-dependency policy statements
+- `existing-projects-qa-test/README.md` (optional)
+  - Project description update to mention Express.js
+
+**Specific Functional Changes:**
+- Migration from `http.createServer()` to `express()` application
+- Conversion of monolithic request handler to Express route handlers
+- Implementation of GET / route returning "Hello, World!" (preserving existing functionality)
+- Implementation of GET /evening route returning "Good evening" (new functionality)
+- Adaptation of error handling to Express error middleware pattern
+- Preservation of all production-hardening features:
+  - Request validation (adapted to Express middleware)
+  - Server error handling (EADDRINUSE, EACCES)
+  - Client error handling (malformed requests)
+  - Graceful shutdown with connection draining
+  - Process-level error handlers (uncaughtException, unhandledRejection)
+  - Signal handling (SIGTERM, SIGINT)
+
+**Environment Configuration:**
+- Existing HOST and PORT environment variables (preserved)
+- User-provided environment variables (Api Key, Token, https://8008) remain available but unused
+- No new environment variables required
+
+**Testing and Verification:**
+- Manual verification using curl commands:
+  - `curl http://localhost:3000/` - Test Hello World endpoint
+  - `curl http://localhost:3000/evening` - Test Good Evening endpoint
+- Signal testing: `kill -SIGTERM <pid>` - Test graceful shutdown
+- Error scenario testing: Port conflicts, invalid requests
+
+### 0.6.2 Explicitly Out of Scope
+
+The following changes are explicitly excluded from this feature addition:
+
+**Additional Endpoints Beyond Specified:**
+- No other routes or endpoints beyond GET / and GET /evening
+- No POST, PUT, DELETE, or PATCH endpoints
+- No WebSocket or Server-Sent Events support
+- No API versioning (e.g., /api/v1/*)
+
+**Advanced Express.js Features:**
+- No template engine integration (EJS, Pug, Handlebars)
+- No static file serving beyond what's needed
+- No session management or authentication
+- No cookie parsing or session stores
+- No CORS configuration
+- No rate limiting or request throttling
+- No API documentation (Swagger, OpenAPI)
+- No GraphQL endpoints
+
+**Database and Data Persistence:**
+- No database integration (PostgreSQL, MongoDB, MySQL, etc.)
+- No ORM or ODM frameworks (Sequelize, Mongoose, TypeORM)
+- No data models or schemas
+- No migration scripts
+- No data seeding or fixtures
+
+**Testing Infrastructure:**
+- No automated test framework setup (Jest, Mocha, Chai)
+- No unit tests for routes or middleware
+- No integration tests
+- No end-to-end tests
+- No test coverage reporting
+- No continuous integration pipeline
+
+**Build and Deployment Enhancements:**
+- No Docker containerization (beyond existing documentation references)
+- No docker-compose.yml configuration
+- No Kubernetes manifests
+- No CI/CD pipeline configuration (.github/workflows, .gitlab-ci.yml)
+- No build tools (Webpack, Babel, TypeScript compilation)
+- No minification or bundling
+
+**Performance Optimizations:**
+- No caching strategies (Redis, Memcached)
+- No load balancing configuration
+- No clustering or worker process management (beyond single process)
+- No performance monitoring or APM integration
+- No response compression (beyond Express defaults)
+
+**Security Enhancements Beyond Current State:**
+- No Helmet.js security headers
+- No input sanitization libraries
+- No SQL injection protection (no database)
+- No CSRF protection
+- No OAuth or JWT authentication
+- No API key management
+
+**Logging and Monitoring Enhancements:**
+- No structured logging (Winston, Bunyan, Pino)
+- No log aggregation (ELK stack, Splunk)
+- No application monitoring (New Relic, Datadog)
+- No health check endpoints (beyond basic server running)
+- No metrics collection (Prometheus)
+
+**Code Organization Refactoring:**
+- No separation into multiple files (routes/, middleware/, controllers/)
+- No modularization beyond single server.js file
+- No separation of concerns into layered architecture
+- No design patterns implementation (MVC, Repository pattern)
+
+**Documentation Beyond Updates:**
+- No API documentation generation
+- No interactive API explorers
+- No architectural diagrams (beyond existing documentation)
+- No runbook creation (beyond existing documentation)
+
+**Development Tooling:**
+- No linting configuration (ESLint)
+- No code formatting (Prettier)
+- No Git hooks (Husky, lint-staged)
+- No debugging configurations
+- No IDE-specific configurations
+
+**Backward Compatibility Concerns:**
+- No support for legacy Node.js versions below v18
+- No polyfills or transpilation for older environments
+
+**Migration of Existing Integrations:**
+- No changes to deployment scripts or processes beyond documentation
+- No updates to monitoring configurations
+- No changes to infrastructure as code (if any exists)
+
+**Rationale for Scope Limitations:**
+This feature addition focuses exclusively on integrating Express.js framework and adding a single new endpoint while preserving all existing production-hardening features. The scope is intentionally minimal to maintain the project's simplicity and align with its current architecture as a lightweight, single-file HTTP server designed for testing and verification purposes.
+
+## 0.7 Special Instructions for Feature Addition
+
+### 0.7.1 Feature-Specific Requirements
+
+**Production-Hardening Preservation (CRITICAL):**
+
+The existing `server.js` implementation contains comprehensive production-ready error handling that was explicitly implemented to address multiple production vulnerabilities. These mechanisms MUST be preserved during the Express.js migration:
+
+- **Request Handler Error Boundaries**: The current try-catch wrapper around request processing (lines 11-37) prevents process crashes from synchronous exceptions. This must be converted to Express error-handling middleware while maintaining the same error containment capability.
+
+- **Server-Level Error Handling**: The explicit server.on('error') handler (lines 42-54) provides targeted guidance for EADDRINUSE and EACCES binding failures. This listener must be attached to the Express server instance returned by app.listen().
+
+- **Graceful Shutdown Logic**: The gracefulShutdown function (lines 72-88) implements connection draining with a 10-second timeout. This function must be updated to reference the Express server instance but maintain identical behavior including the forced exit fallback.
+
+- **Process-Level Safety Nets**: The uncaughtException (lines 97-115) and unhandledRejection (lines 119-137) handlers provide last-resort error recovery. These are process-level handlers independent of the HTTP framework and should be preserved unchanged.
+
+- **Client Error Handling**: The server.on('clientError') handler (lines 58-68) prevents socket leaks from malformed requests. This must be attached to the Express server instance to maintain robust connection management.
+
+- **Input Validation**: The current validation of req.method and req.url (lines 14-19) prevents null reference errors. While Express provides some built-in validation, explicit validation middleware should be considered for consistency with the existing defensive programming approach.
+
+**Documentation Governance Requirements:**
+
+The `blitzy/documentation/` folder contains authoritative governance artifacts that are explicitly linked to CI gating and Backprop integration:
+
+- **Zero-Dependency Policy Relaxation**: The Technical Specifications document explicitly states "zero external dependencies (no third-party packages allowed)". This policy must be formally updated to state: "Minimal external dependencies: Express.js framework and its required transitive dependencies only. No additional third-party packages beyond Express.js ecosystem requirements."
+
+- **Verification Suite Updates**: The Project Guide documents a "5-test verification suite" with commands like `npm ci; node test_server.js`. These verification commands may need updates to test both endpoints after Express.js integration.
+
+- **Commit and Diff Tracking**: The documentation references commit fc40f9a with diff summary "+134 additions, -5 deletions". This feature addition should similarly document the commit hash and diff statistics for traceability.
+
+**Framework Integration Pattern Requirements:**
+
+- **Middleware Order**: Express middleware executes in registration order. The implementation must ensure:
+  1. Request validation middleware (if created) executes first
+  2. Route handlers execute after validation
+  3. Error handling middleware registers last (4-parameter function)
+  4. 404 handler (optional) registers after routes but before error handler
+
+- **Error Handling Convention**: Express distinguishes between regular middleware (3 parameters: req, res, next) and error-handling middleware (4 parameters: err, req, res, next). The error handler must use the 4-parameter signature to be recognized by Express.
+
+- **Server Instance Management**: Express's app.listen() returns the underlying http.Server instance. This instance must be stored in a module-level variable for use in:
+  - Server event listeners (error, clientError)
+  - Graceful shutdown function
+  - Process-level error handlers that call server.close()
+
+**Environment Variable Handling:**
+
+The user has provided environment variables (Api Key, Token, https://8008) that are available in the runtime environment but not explicitly used by this implementation. The implementation should:
+
+- Continue using HOST and PORT environment variables as primary configuration
+- Not require the provided environment variables for basic functionality
+- Document that additional environment variables are available for future use
+- Maintain the 12-factor app principle of configuration through environment
+
+**Response Format Consistency:**
+
+Both endpoints (existing and new) should maintain consistent response formatting:
+
+- HTTP Status Code: 200 OK for successful responses
+- Content-Type Header: 'text/plain' for simple text responses
+- Response Termination: Include newline character (\n) at end of response body
+- Error Responses: 400 Bad Request for validation failures, 500 Internal Server Error for exceptions
+
+**Endpoint Path Selection:**
+
+The user request specifies adding an endpoint that returns "Good evening" but does not specify the path. The recommended path is:
+
+- `GET /evening` - Clear, descriptive, follows RESTful convention for resources
+- Alternative considerations:
+  - `GET /good-evening` - More explicit but longer
+  - `GET /greet/evening` - Nested resource pattern
+  - `GET /` with query parameter - Would conflict with existing endpoint
+
+The implementation uses `GET /evening` unless specifically directed otherwise.
+
+**Backward Compatibility Assurance:**
+
+- The existing endpoint behavior (`GET /` returning "Hello, World!") must be preserved exactly
+- Response format, status codes, and headers should match the original implementation
+- Environment variable configuration must work identically
+- Graceful shutdown behavior must be indistinguishable from the original
+- All error scenarios must be handled with the same robustness
+
+**Node.js Version Compatibility:**
+
+- Current runtime: Node.js v20.19.5 (verified)
+- Express.js v4.21.x requirement: Node.js v12+ (fully compatible)
+- Express.js v5.1.0 requirement: Node.js v18+ (fully compatible)
+- The implementation should use Node.js v20.x as the target runtime
+- No fallback to system Node.js version - use project-specific runtime
+
+**Dependency Version Pinning Strategy:**
+
+- Use caret (^) notation for Express.js: `"express": "^4.21.2"`
+- Rationale: Allows patch and minor version updates for security fixes while preventing breaking changes
+- package-lock.json will pin exact versions of all transitive dependencies
+- Run `npm audit` after installation to check for known vulnerabilities
+
+### 0.7.2 Security Considerations
+
+**Minimal Attack Surface:**
+
+- Maintain the principle of minimal external dependencies
+- Express.js v4.21.2 includes security patches for known vulnerabilities
+- Regularly update Express.js for security patches within the 4.x major version
+- Avoid installing additional middleware packages unless absolutely necessary
+
+**Input Validation:**
+
+- Express provides some built-in request validation, but explicit validation is recommended
+- Validate request paths and methods before processing
+- Sanitize any user input if endpoints evolve to accept parameters or body data
+
+**Error Information Disclosure:**
+
+- Error responses should not leak stack traces or internal paths in production
+- Current implementation logs detailed errors to console (appropriate for debugging)
+- Consider environment-based error verbosity (detailed in development, generic in production)
+
+### 0.7.3 Performance Considerations
+
+**Response Time Targets:**
+
+The Project Guide documents performance targets:
+- Response time: <5ms
+- Startup time: <100ms
+- Memory usage: ≤30MB
+
+Express.js adds minimal overhead compared to native http module:
+- Additional middleware processing: ~0.1-0.5ms per request
+- Memory footprint increase: ~5-10MB for Express.js and dependencies
+- Startup time increase: ~10-20ms for Express initialization
+
+These increases should still allow the application to meet documented performance targets, though they should be verified through testing.
+
+**Scalability Considerations (Future):**
+
+- Single-process Express.js suitable for current simple use case
+- For production scaling, consider: Node.js cluster module, PM2 process manager, or containerized horizontal scaling
+- Current implementation focuses on correctness and maintainability over premature optimization
 
 
 # 1. Introduction
@@ -982,7 +862,7 @@ Upon completion of all checklist items, the bug fix is production-ready and can 
 
 The **hao-backprop-test** repository (packaged as `hello_world` version 1.0.0) is a deliberately minimal Node.js HTTP server test project created specifically for Backprop integration testing. Authored by hxu and distributed under the MIT license, this project serves as a preserved, stable test scaffold for validating code analysis and AI-assisted development tooling. The repository contains an explicit preservation notice in its documentation stating "Do not touch!", indicating that the codebase is intentionally maintained in its current minimal state to provide a consistent baseline for integration testing.
 
-The entire system consists of exactly four files in a flat directory structure with zero external dependencies, relying solely on Node.js built-in modules. This intentional simplicity creates a controlled environment for CI smoke tests and integration validation, where external variables are minimized to ensure reproducible and reliable test results.
+The entire system consists of exactly four files in a flat directory structure with minimal external dependencies (Express.js framework only), relying primarily on Node.js built-in modules. This intentional simplicity creates a controlled environment for CI smoke tests and integration validation, where external variables are minimized to ensure reproducible and reliable test results.
 
 ### 1.1.2 Core Business Problem
 
@@ -993,7 +873,7 @@ The core challenges solved by this test project include:
 - **Integration Validation**: Providing a reference implementation for testing Backprop's ability to analyze, understand, and interact with Node.js codebases
 - **Baseline Consistency**: Maintaining a preserved state that eliminates variability in test results caused by code changes or dependency updates
 - **Minimal Complexity**: Offering a simple, self-contained server implementation that reduces potential points of failure during integration testing
-- **Reproducibility**: Ensuring deterministic package installations and predictable runtime behavior through lockfile management and zero external dependencies
+- **Reproducibility**: Ensuring deterministic package installations and predictable runtime behavior through lockfile management and minimal external dependencies (Express.js framework only)
 
 ### 1.1.3 Key Stakeholders and Users
 
@@ -1015,7 +895,7 @@ The business value delivered by this test project centers on enabling reliable a
 
 - **Development Tool Validation**: Provides a stable foundation for testing and validating Backprop's integration capabilities with Node.js projects
 - **Reference Implementation**: Serves as a minimal example of Node.js HTTP server architecture that can be used for documentation and demonstration purposes
-- **Testing Efficiency**: Reduces test execution time and complexity by maintaining zero external dependencies and minimal code surface area
+- **Testing Efficiency**: Reduces test execution time and complexity by maintaining minimal external dependencies (Express.js framework only) and minimal code surface area
 - **Reproducible Environment**: Ensures consistent test results through preserved codebase state and deterministic package management
 
 **Business Impact Metrics:**
@@ -1129,11 +1009,11 @@ graph TB
 
 **Component Descriptions:**
 
-1. **server.js** (14 lines): The core HTTP server implementation that creates a server instance, defines a request handler returning "Hello, World!\n", and binds the server to 127.0.0.1:3000. This single file contains all application logic.
+1. **server.js** (~145 lines): The core HTTP server implementation using Express.js framework v4.21.2, with two routes (GET / returning "Hello, World!\n" and GET /evening returning "Good evening\n"), comprehensive error handling middleware, graceful shutdown mechanisms, and binds the server to 127.0.0.1:3000. This single file contains all application logic with production-hardening features.
 
-2. **package.json**: The project manifest declaring package identity (hello_world v1.0.0), metadata (author: hxu, MIT license), and configuration. Notably, it declares "index.js" as the main entrypoint, though the actual server file is server.js—a discrepancy present in the repository. Contains a placeholder test script that exits with an error code by design.
+2. **package.json**: The project manifest declaring package identity (hello_world v1.0.0), metadata (author: hxu, MIT license), dependencies (Express.js v4.21.2), and configuration. Notably, it declares "index.js" as the main entrypoint, though the actual server file is server.js—a discrepancy present in the repository. Contains a placeholder test script that exits with an error code by design.
 
-3. **package-lock.json**: The NPM lockfile (version 3) that records the root package snapshot and confirms zero resolved external dependencies. Enables deterministic installations critical for CI/CD environments and reproducible test execution.
+3. **package-lock.json**: The NPM lockfile (version 3) that records the root package snapshot including Express.js v4.21.2 and its transitive dependencies (~30 packages). Enables deterministic installations critical for CI/CD environments and reproducible test execution.
 
 4. **README.md**: Human-facing documentation that communicates the repository's purpose as a "test project for backprop integration" and includes the preservation notice "Do not touch!" to prevent modifications that would compromise the test baseline.
 
@@ -1201,7 +1081,7 @@ While no explicit success metrics are documented within the repository files, th
 
 The project's success depends on maintaining specific characteristics that support its testing purpose:
 
-1. **Minimal Complexity**: The codebase must remain simple with zero external dependencies to ensure test reliability and fast execution
+1. **Minimal Complexity**: The codebase must remain simple with minimal external dependencies (Express.js framework only) to ensure test reliability and fast execution
 2. **Deterministic Behavior**: Package installation and runtime behavior must be reproducible across environments through lockfile management
 3. **Preserved State**: The codebase must remain unmodified (per README preservation notice) to maintain consistent test baseline
 4. **Clear Documentation**: Usage instructions and intent must be clearly communicated to prevent misuse or inappropriate modifications
@@ -1451,9 +1331,9 @@ This Introduction section was developed from the following repository files and 
 #### Files Examined
 
 - `README.md` - Project identification (hao-backprop-test), purpose statement (Backprop integration test scaffold), preservation notice ("Do not touch!")
-- `package.json` - Project metadata including package name (hello_world), version (1.0.0), author (hxu), license (MIT), main entrypoint declaration, test script definition, confirmation of zero dependencies
-- `package-lock.json` - Lockfile version 3 specification, root package snapshot, verification of zero external dependencies
-- `server.js` - Complete HTTP server implementation using Node.js `http` module, request handler logic, network configuration (hostname: 127.0.0.1, port: 3000), response behavior (status: 200, content-type: text/plain, body: "Hello, World!\n"), console logging implementation
+- `package.json` - Project metadata including package name (hello_world), version (1.0.0), author (hxu), license (MIT), main entrypoint declaration, test script definition, dependencies object with Express.js v4.21.2
+- `package-lock.json` - Lockfile version 3 specification, root package snapshot, Express.js v4.21.2 and ~30 transitive dependencies
+- `server.js` - Complete HTTP server implementation using Express.js framework v4.21.2, two route handlers (GET / and GET /evening), production-hardening features (error handling middleware, graceful shutdown, signal handlers), network configuration (hostname: 127.0.0.1, port: 3000), response behavior (status: 200, content-type: text/plain), console logging implementation
 
 #### Folders Explored
 
@@ -1582,8 +1462,8 @@ This feature delivers foundational value for the test scaffold's operational req
 
 Implemented across two configuration files:
 
-- `package.json`: Declares package identity (hello_world v1.0.0), metadata (MIT license, author hxu), main entrypoint (index.js), and npm scripts (test placeholder)
-- `package-lock.json`: Provides lockfile version 3 snapshot confirming zero resolved external dependencies and deterministic installation state
+- `package.json`: Declares package identity (hello_world v1.0.0), metadata (MIT license, author hxu), main entrypoint (index.js), dependencies (Express.js v4.21.2), and npm scripts (test placeholder)
+- `package-lock.json`: Provides lockfile version 3 snapshot with Express.js v4.21.2 and ~30 transitive dependencies for deterministic installation state
 
 **Known Discrepancy**: The `package.json` file declares `"main": "index.js"` as the entry point, but the actual server implementation resides in `server.js`. This discrepancy has minimal operational impact since users execute `node server.js` directly rather than requiring the package as a module.
 
@@ -1603,11 +1483,11 @@ None—this feature operates independently of other system features.
 
 **External Dependencies**
 
-None—the package.json explicitly declares zero external npm dependencies.
+Express.js v4.21.2 and its transitive dependencies (~30 packages total) are declared in package.json for web framework functionality.
 
 **Integration Requirements**
 
-- NPM registry access (for lockfile validation, even with zero dependencies)
+- NPM registry access (for Express.js and dependency installation and validation)
 - File system access to read package.json and package-lock.json
 - Standard npm cache directory access
 
@@ -1631,7 +1511,7 @@ None—the package.json explicitly declares zero external npm dependencies.
 
 Feature F-003 encompasses the repository's overall design and purpose as a preserved test scaffold for Backprop integration testing. This feature is meta-functional, representing the intentional architecture, documentation, and preservation policy that makes the repository valuable as a stable integration test baseline. The explicit "Do not touch!" notice in `README.md` signals that the codebase state must be preserved to maintain its value as a consistent test fixture.
 
-The test scaffold framework combines minimal complexity (4 files, zero dependencies, flat structure), clear documentation (README.md explaining purpose and preservation policy), and reproducible behavior (deterministic installations, stateless execution) to create an optimal environment for focused integration testing.
+The test scaffold framework combines minimal complexity (4 files, minimal dependencies with Express.js framework, flat structure), clear documentation (README.md explaining purpose and preservation policy), and reproducible behavior (deterministic installations, stateless execution) to create an optimal environment for focused integration testing.
 
 **Business Value**
 
@@ -6024,34 +5904,41 @@ flowchart TD
 
 This section documents key architectural decisions using the Architecture Decision Record (ADR) format, capturing context, decisions, rationale, and trade-offs.
 
-#### 5.3.1.1 ADR-001: Zero External Dependencies
+#### 5.3.1.1 ADR-001: Minimal External Dependencies (Updated for Express.js Migration)
 
-**Status**: Accepted and Implemented
+**Status**: Updated and Implemented
+
+**Original Decision (Phase 1 - Production Hardening):**
+Zero external dependencies - implement using only Node.js built-in modules.
+
+**Updated Decision (Phase 2 - Express.js Migration):**
+Minimal external dependencies - Express.js framework v4.21.2 as the sole dependency.
 
 **Context:**
-The system serves as a test fixture for Backprop integration validation. Test fixtures require stable, deterministic behavior to provide reliable baselines for analysis tool testing. External npm dependencies introduce variability through version updates, security patches, registry availability, and transitive dependency changes.
+The system serves as a test fixture for Backprop integration validation. During Phase 2, the requirement was added to migrate from native `http` module to Express.js framework while maintaining all production hardening features. This necessitated relaxing the zero-dependency constraint to allow Express.js and its transitive dependencies.
 
-**Decision:**
-Implement the HTTP server using only Node.js built-in modules with zero external npm packages. The `package.json` file declares no `dependencies` or `devDependencies` sections, and `package-lock.json` confirms zero resolved packages.
+**Revised Policy:**
+Implement the HTTP server using Express.js framework v4.21.2. The `package.json` file declares Express.js as the sole production dependency. Express.js and its ~30 transitive dependencies are pinned via `package-lock.json` for reproducibility.
 
-**Rationale:**
+**Rationale (Updated for Express.js):**
 
-1. **Deterministic Behavior**: Built-in modules are versioned with Node.js runtime, ensuring consistent behavior across environments with the same Node.js version
-2. **Supply Chain Security**: Zero dependencies eliminates supply chain attack surface (no malicious packages, no dependency confusion attacks)
-3. **Installation Speed**: `npm install` completes in milliseconds with no packages to download or install
-4. **Maintenance Burden**: No dependency updates, security patches, or breaking changes to manage
-5. **Test Isolation**: Removes confounding variables from Backprop integration testing
+1. **Framework Benefits**: Express.js provides clean routing, middleware architecture, and production-ready error handling patterns
+2. **Maintained Determinism**: package-lock.json pins exact versions of Express.js and all ~30 transitive dependencies
+3. **Acceptable Trade-offs**: Express.js v4.21.2 is mature, stable, and widely used in production environments
+4. **Supply Chain Security**: Single well-maintained dependency is manageable; use `npm audit` for vulnerability scanning
+5. **Feature Requirements**: Express.js migration was an explicit feature requirement; maintained all production hardening
 
-**Consequences:**
+**Consequences (Updated):**
 
-- **Positive**: Eliminated supply chain risks, guaranteed reproducibility, minimal installation overhead
-- **Negative**: No framework conveniences (routing, middleware, template engines), manual implementation of all functionality
-- **Risk Mitigation**: For a 14-line static response server, framework features provide no value—raw `http` module is sufficient
+- **Positive**: Clean routing architecture, middleware patterns, framework best practices, maintained all production hardening features
+- **Negative**: Added ~30 transitive dependencies, increased installation time to ~2-3 seconds, requires npm audit monitoring
+- **Risk Mitigation**: Express.js v4.x is battle-tested with 10+ years of production use; version pinning via package-lock.json ensures reproducibility
 
-**Evidence:**
-- `package.json` lines 1-11: No dependency declarations
-- `package-lock.json` lines 6-12: Empty packages tree (only root package listed)
-- Technical Specification Section 3.2: Zero-dependency architecture documented
+**Evidence (Updated):**
+- `package.json`: Express.js v4.21.2 declared as sole dependency
+- `package-lock.json`: Full dependency tree with ~30 packages pinned to specific versions
+- `server.js`: Express.js integration with app.listen(), routing, and middleware
+- Technical Specification Section 0.0: Express.js migration documented
 
 #### 5.3.1.2 ADR-002: Localhost-Only Network Binding
 
