@@ -3,6 +3,9 @@
     "version": "1.0.0",
     "description": "Hello world in Node.js",
     "main": "src/server.js",
+    "engines": {
+        "node": ">=18.0.0"
+    },
     "scripts": {
         "start": "node src/server.js",
         "dev": "nodemon src/server.js",
@@ -13,11 +16,6 @@
         "pm2:logs": "pm2 logs",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "engines": {
-        "node": ">=18.0.0"
-    },
-    "author": "hxu",
-    "license": "MIT",
     "dependencies": {
         "compression": "^1.7.5",
         "cors": "^2.8.5",
@@ -29,5 +27,7 @@
     },
     "devDependencies": {
         "nodemon": "^3.1.9"
-    }
+    },
+    "author": "hxu",
+    "license": "MIT"
 }
