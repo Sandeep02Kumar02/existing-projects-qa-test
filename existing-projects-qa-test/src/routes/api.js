@@ -18,10 +18,10 @@
  * @example
  * // Mount in the main application (src/routes/index.js)
  * const apiRouter = require('./api');
- * app.use('/api', apiRouter);
+ * router.use('/', apiRouter);  // Mounted at root per Section 0.7.4
  *
- * // Or mount directly in app.js
- * app.use('/api', require('./routes/api'));
+ * // Or mount directly in app.js (at root level)
+ * app.use('/', require('./routes/api'));
  *
  * @see Section 0.3.2 - API routes for echo, info endpoints
  * @see Section 0.5.5 - User-Provided Examples Integration
@@ -65,7 +65,7 @@ const router = express.Router();
  *
  * @example
  * // Request
- * curl -X POST http://localhost:3000/api/echo \
+ * curl -X POST http://localhost:3000/echo \
  *   -H "Content-Type: application/json" \
  *   -d '{"message": "Hello", "count": 42}'
  *
@@ -79,7 +79,7 @@ const router = express.Router();
  *
  * @example
  * // Empty body request
- * curl -X POST http://localhost:3000/api/echo \
+ * curl -X POST http://localhost:3000/echo \
  *   -H "Content-Type: application/json" \
  *   -d '{}'
  *
@@ -128,7 +128,7 @@ router.post('/echo', (req, res) => {
  *
  * @example
  * // Request
- * curl http://localhost:3000/api/info
+ * curl http://localhost:3000/info
  *
  * // Response (200 OK)
  * {
@@ -183,17 +183,18 @@ router.get('/info', (req, res) => {
 /**
  * Export the API router for use in the main application.
  *
- * The router should be mounted at the '/api' path prefix in the main
- * routes aggregator (src/routes/index.js) or directly in app.js.
+ * Per Section 0.7.4, the router should be mounted at the root path
+ * in the routes aggregator (src/routes/index.js) to make endpoints
+ * available at /echo and /info directly.
  *
  * @example
  * // In src/routes/index.js
  * const apiRouter = require('./api');
- * router.use('/api', apiRouter);
+ * router.use('/', apiRouter);
  *
- * // Resulting endpoints:
- * // POST /api/echo
- * // GET /api/info
+ * // Resulting endpoints (per Section 0.7.4):
+ * // POST /echo
+ * // GET /info
  *
  * @exports router
  * @type {express.Router}

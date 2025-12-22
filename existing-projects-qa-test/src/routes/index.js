@@ -151,11 +151,15 @@ router.get('/', (req, res) => {
 router.use('/health', healthRoutes);
 
 /**
- * Mount API routes at /api path.
+ * Mount API routes at root path.
  *
  * The API routes module provides utility endpoints for the application:
- * - POST /api/echo → Echoes the request body back to the client
- * - GET /api/info  → Returns server metadata and configuration
+ * - POST /echo → Echoes the request body back to the client
+ * - GET /info  → Returns server metadata and configuration
+ *
+ * Per Section 0.7.4 of the Agent Action Plan, the endpoints must be:
+ * - `/echo` (not `/api/echo`)
+ * - `/info` (not `/api/info`)
  *
  * These endpoints are useful for:
  * - Testing and debugging API integrations
@@ -163,9 +167,9 @@ router.use('/health', healthRoutes);
  * - Monitoring server status and version information
  *
  * @see module:routes/api
- * @see Section 0.3.2 - router.use('/api', apiRoutes)
+ * @see Section 0.7.4 - API Response Validation
  */
-router.use('/api', apiRoutes);
+router.use('/', apiRoutes);
 
 // =============================================================================
 // Module Export
@@ -180,11 +184,11 @@ router.use('/api', apiRoutes);
  * app.use('/', routes);
  * ```
  *
- * The resulting route hierarchy:
+ * The resulting route hierarchy (per Section 0.7.4):
  * - GET /           → "Hello, World!" response
  * - GET /health     → Health status with metrics
- * - POST /api/echo  → Request body echo
- * - GET /api/info   → Server metadata
+ * - POST /echo      → Request body echo
+ * - GET /info       → Server metadata
  *
  * @exports router
  * @type {express.Router}
