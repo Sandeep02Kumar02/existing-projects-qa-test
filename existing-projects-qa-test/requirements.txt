@@ -1,0 +1,27 @@
+# Python Flask Application Dependencies
+# Equivalent to Node.js Express.js stack
+
+# Web Framework (equivalent to express)
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# WSGI Server for production (equivalent to Node.js http server)
+gunicorn==21.2.0
+
+# Environment variable management (equivalent to dotenv)
+python-dotenv==1.0.0
+
+# CORS support (equivalent to cors npm package)
+Flask-Cors==4.0.0
+
+# Response compression (equivalent to compression npm package)
+flask-compress==1.14
+
+# Logging utilities
+colorlog==6.8.0
+
+# Process management utilities
+psutil==5.9.7
+
+# For signal handling on Windows compatibility
+# signal module is built-in, no extra package needed
