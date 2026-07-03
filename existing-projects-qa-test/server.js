@@ -12,8 +12,10 @@ const app = express();
 app.disable('x-powered-by');
 app.disable('etag');
 
-// Enable strict routing so '/good-evening' matches exactly and '/good-evening/' does not
+// Enable strict and case-sensitive routing so only the exact '/good-evening' path matches;
+// trailing-slash ('/good-evening/') and case-variant (e.g. '/GOOD-EVENING') paths fall through to the fallback
 app.set('strict routing', true);
+app.set('case sensitive routing', true);
 
 // New endpoint returning the "Good evening" response
 app.get('/good-evening', (req, res) => res.type('text/plain').send('Good evening'));

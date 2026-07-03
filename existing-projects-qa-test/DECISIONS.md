@@ -36,7 +36,7 @@ The matrix maps every existing `server.js` construct to its Express target at 10
 | `uncaughtException` handler | L97-L115 | Unchanged |
 | `unhandledRejection` handler | L119-L137 | Unchanged |
 | `server.listen(port, hostname, cb)` (callback fires on `'listening'` only) | L140-L143 | `const server = app.listen(port, hostname)` with the startup log bound to `server.on('listening', …)` — preserves native semantics (no success log on a failed bind); the captured `server` re-attaches all hardening |
-| *(new — no source construct)* | — | `app.get('/good-evening', ...)` → `Good evening`, with `app.set('strict routing', true)` so only the exact `/good-evening` path matches and `/good-evening/` falls through to the fallback |
+| *(new — no source construct)* | — | `app.get('/good-evening', ...)` → `Good evening`, with `app.set('strict routing', true)` and `app.set('case sensitive routing', true)` so only the exact `/good-evening` path matches and trailing-slash (`/good-evening/`) and case-variant (e.g. `/GOOD-EVENING`) paths fall through to the fallback |
 
 ## Authorized Architectural Deviations
 
