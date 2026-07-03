@@ -19,7 +19,10 @@ app.get('/good-evening', (req, res) => res.type('text/plain').send('Good evening
 app.use((req, res) => res.status(200).type('text/plain').send('Hello, World!\n'));
 
 // Start the server
-const server = app.listen(port, hostname, () => {
+const server = app.listen(port, hostname);
+
+// Log the listening address once the server has successfully bound
+server.on('listening', () => {
   console.log(`Server running at http://${hostname}:${port}/`);
   console.log('Press Ctrl+C to stop the server');
 });
