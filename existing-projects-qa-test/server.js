@@ -1,49 +1,21 @@
 const http = require('http');
+const express = require('express');
 
-// Configuration with environment variable support for production flexibility
-// Motive: Allow deployment-time configuration without code changes, following 12-factor app principles
+// Configuration with environment variable support
 const hostname = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
 
-// Request handler with proper error handling
-// Motive: Prevent request processing errors from crashing the entire server process
-const server = http.createServer((req, res) => {
-  try {
-    // Input validation: Ensure request method and URL are present
-    // Motive: Prevent null reference errors when accessing request properties
-    if (!req.method || !req.url) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Bad Request: Invalid request format\n');
-      return;
-    }
-
-    // Normal request processing
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/plain');
-    res.end('Hello, World!\n');
-  } catch (error) {
-    // Handle any synchronous errors in request processing
-    // Motive: Contain errors within request scope, log for debugging, return 500 to client
-    console.error('Error processing request:', error);
-    
-    // Only send error response if headers haven't been sent
-    // Motive: Prevent "Cannot set headers after they are sent" errors
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Internal Server Error\n');
-    }
-  }
-});
+// Express application, routes, and HTTP server
+const app = express();
+app.get('/', (req, res) => res.status(200).type('text/plain').send('Hello, World!\n'));
+app.get('/good-evening', (req, res) => res.status(200).type('text/plain').send('Good evening\n'));
+const server = http.createServer(app);
 
 // Handle server-level errors (e.g., port already in use, permission denied)
-// Motive: Prevent unhandled server binding failures from crashing process with unclear error messages
 server.on('error', (error) => {
   console.error('Server error:', error.message);
   
   // Provide specific guidance for common errors
-  // Motive: Help operators quickly identify and resolve deployment issues
   if (error.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use`);
   } else if (error.code === 'EACCES') {
@@ -54,12 +26,10 @@ server.on('error', (error) => {
 });
 
 // Handle client connection errors
-// Motive: Prevent malformed requests or client errors from leaking sockets or crashing server
 server.on('clientError', (error, socket) => {
   console.error('Client connection error:', error.message);
   
   // Send HTTP 400 response if socket is still writable
-  // Motive: Inform client of error condition before closing connection
   if (socket.writable) {
     socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
   } else {
@@ -68,19 +38,16 @@ server.on('clientError', (error, socket) => {
 });
 
 // Graceful shutdown function with timeout
-// Motive: Ensure in-flight requests complete before shutdown, preventing client errors during deployments
 function gracefulShutdown(signal) {
   console.log(`\n${signal} received. Starting graceful shutdown...`);
   
   // Stop accepting new connections
-  // Motive: Drain existing connections while rejecting new ones
   server.close(() => {
     console.log('Server closed. All connections finished.');
     process.exit(0);
   });
   
   // Force shutdown after timeout if connections don't close naturally
-  // Motive: Prevent hung processes if connections don't drain within reasonable time
   setTimeout(() => {
     console.error('Forcing shutdown after timeout');
     process.exit(1);
@@ -88,26 +55,22 @@ function gracefulShutdown(signal) {
 }
 
 // Handle graceful shutdown signals
-// Motive: Support standard Unix process management (kill, systemd, Docker, Kubernetes)
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions (last resort error handler)
-// Motive: Log unexpected errors and attempt graceful shutdown instead of silent crash
 process.on('uncaughtException', (error) => {
   console.error('UNCAUGHT EXCEPTION! Shutting down...');
   console.error('Error:', error.name, error.message);
   console.error('Stack:', error.stack);
   
   // Attempt graceful shutdown, then force exit
-  // Motive: Per Node.js best practices, do not continue after uncaught exception
   server.close(() => {
     console.log('Server closed due to uncaught exception');
     process.exit(1);
   });
   
   // Force exit if server doesn't close in time
-  // Motive: Prevent hung process in corrupted state
   setTimeout(() => {
     console.error('Forcing exit after uncaught exception');
     process.exit(1);
@@ -115,21 +78,18 @@ process.on('uncaughtException', (error) => {
 });
 
 // Handle unhandled promise rejections
-// Motive: Catch async errors that slip through without .catch() handlers
 process.on('unhandledRejection', (reason, promise) => {
   console.error('UNHANDLED PROMISE REJECTION! Shutting down...');
   console.error('Rejection at:', promise);
   console.error('Reason:', reason);
   
   // Treat unhandled rejections as critical errors
-  // Motive: Prevent silent failures and data corruption from unhandled async errors
   server.close(() => {
     console.log('Server closed due to unhandled rejection');
     process.exit(1);
   });
   
   // Force exit if server doesn't close in time
-  // Motive: Ensure process doesn't hang in undefined state
   setTimeout(() => {
     console.error('Forcing exit after unhandled rejection');
     process.exit(1);
