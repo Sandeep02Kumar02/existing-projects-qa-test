@@ -17,6 +17,7 @@ This document is the single source of truth for the "why" behind the Express.js 
 | D9 | Deliver the decision log as `DECISIONS.md` | Inline code comments; specification-only | The "Explainability" rule mandates a Markdown decision log as the single source of truth and forbids code-comment rationale | Adds one file — rule-mandated and consistent with scope |
 | D10 | Do not add tests, a `start` script, correct `main`, or edit the README | Full project hardening | Minimal-change rule; not requested by the user | Pre-existing conditions remain: `main` → nonexistent `index.js`; placeholder `test` script — logged as accepted deviations |
 | D11 | Remove the now-unused direct `require('http')` | Retain the import | Part of the scoped migration; `app.listen` provides the `http.Server` | None |
+| D12 | Disable Express's default `X-Powered-By` and `ETag` response headers; accept the `text/plain; charset=utf-8` content type | Leave `X-Powered-By` enabled; keep the weak `ETag`; force a bare `text/plain` via `res.setHeader`/`res.end` | `X-Powered-By` is avoidable framework fingerprinting, so it is disabled (the preferred security fix). `ETag` is disabled because the native server emitted none and keeping it would add new conditional-request (`304`) behavior — disabling it keeps response side-effects identical (minimal-change rule). `charset=utf-8` is accepted: it is the standards-compliant output of the AAP §0.5.2-prescribed `res.type('text/plain').send(...)`, the media type stays `text/plain`, and it changes no behavior | The header set differs from the pre-migration native contract only by the accepted `charset=utf-8` suffix; status (`200`) and body bytes (`14`/`12`) are unchanged — verified via runtime header capture confirming no `X-Powered-By` and no `ETag` |
 
 ## Bidirectional Traceability Matrix (http → Express)
 
@@ -36,12 +37,14 @@ The matrix maps every existing `server.js` construct to its Express target at 10
 | `uncaughtException` handler | L97-L115 | Unchanged |
 | `unhandledRejection` handler | L119-L137 | Unchanged |
 | `server.listen(port, hostname, cb)` | L140-L143 | `const server = app.listen(port, hostname, cb)` |
+| Response header set: bare `Content-Type: text/plain`, no `X-Powered-By`, no `ETag` | L22-L24 | `app.disable('x-powered-by')` + `app.disable('etag')`; `res.type('text/plain').send(...)` keeps `text/plain` and adds the accepted `charset=utf-8` (D12) |
 | *(new — no source construct)* | — | `app.get('/good-evening', ...)` → `Good evening` |
 
 ## Authorized Architectural Deviations
 
-Two pre-existing constraints are intentionally superseded under the user's explicit request to add Express and a new endpoint:
+The following pre-existing constraints and framework defaults are intentionally addressed under the user's explicit request to add Express and a new endpoint:
 
 - **Zero-dependency / zero-framework posture reversed (D1):** The technical specification defined a deliberate zero-framework architecture that explicitly excluded Express (Technical Specification §3.2.1, §3.2.4). Adding Express reverses that stance. This is authorized by the user's explicit instruction and is mitigated by pinning a known-good version (`express@^5.2.1`) and regenerating `package-lock.json`.
 - **README "Do not touch!" notice superseded for scoped files (D9/D10):** `README.md` marks the repository immutable, but the user's explicit modification request supersedes that notice for the scoped files (`server.js`, `package.json`, `package-lock.json`) and the new `DECISIONS.md`. `README.md` itself is left unchanged, honoring the notice everywhere it does not conflict with the request.
 - **Accepted pre-existing conditions left untouched (D10):** `main` still points to a nonexistent `index.js`, and the placeholder `test` script is retained. Correcting these is out of scope under the minimal-change rule.
+- **Express default response headers reviewed and secured (D12):** The migration surfaced three response headers absent from the native `http` server — `X-Powered-By: Express`, a weak `ETag` (added by `res.send`), and the `; charset=utf-8` suffix on `Content-Type`. `X-Powered-By` and `ETag` are disabled via `app.disable('x-powered-by')` and `app.disable('etag')`, removing framework fingerprinting (the preferred security fix) and keeping response side-effects identical to the native server (no `ETag`-driven conditional-request / `304` behavior). The `charset=utf-8` suffix is accepted: it is the standards-compliant output of the AAP §0.5.2-prescribed `res.type('text/plain').send(...)`, and the media type remains `text/plain`. Status (`200`) and body bytes are unchanged (`Hello, World!\n` = 14 bytes; `Good evening` = 12 bytes).

@@ -8,6 +8,10 @@ const port = process.env.PORT || 3000;
 // Create the Express application
 const app = express();
 
+// Disable the default X-Powered-By and ETag response headers
+app.disable('x-powered-by');
+app.disable('etag');
+
 // New endpoint returning the "Good evening" response
 app.get('/good-evening', (req, res) => res.type('text/plain').send('Good evening'));
 
