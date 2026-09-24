@@ -1,41 +1,17 @@
 const http = require('http');
+const express = require('express');
 
 // Configuration with environment variable support for production flexibility
 // Motive: Allow deployment-time configuration without code changes, following 12-factor app principles
 const hostname = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
 
-// Request handler with proper error handling
-// Motive: Prevent request processing errors from crashing the entire server process
-const server = http.createServer((req, res) => {
-  try {
-    // Input validation: Ensure request method and URL are present
-    // Motive: Prevent null reference errors when accessing request properties
-    if (!req.method || !req.url) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Bad Request: Invalid request format\n');
-      return;
-    }
+const app = express();
 
-    // Normal request processing
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/plain');
-    res.end('Hello, World!\n');
-  } catch (error) {
-    // Handle any synchronous errors in request processing
-    // Motive: Contain errors within request scope, log for debugging, return 500 to client
-    console.error('Error processing request:', error);
-    
-    // Only send error response if headers haven't been sent
-    // Motive: Prevent "Cannot set headers after they are sent" errors
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Internal Server Error\n');
-    }
-  }
-});
+app.get('/', (req, res) => res.type('text/plain').send('Hello, World!\n'));
+app.get('/good-evening', (req, res) => res.type('text/plain').send('Good evening'));
+
+const server = http.createServer(app);
 
 // Handle server-level errors (e.g., port already in use, permission denied)
 // Motive: Prevent unhandled server binding failures from crashing process with unclear error messages
