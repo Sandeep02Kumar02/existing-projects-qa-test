@@ -1,7 +1,7 @@
 const http = require('http');
 // Express.js web framework for routing and middleware
 // Motive: Express adds declarative routing and middleware on top of Node's http module, while http is still
-// needed to create and own the server instance whose lifecycle (events, listen, graceful shutdown) is managed below
+// needed here to create the HTTP server before listening, so its event handlers attach first
 const express = require('express');
 
 // Configuration with environment variable support for production flexibility
@@ -11,19 +11,19 @@ const port = process.env.PORT || 3000;
 
 // Create Express application
 // Motive: express() returns an app that is itself a request handler function; it collects routes and
-// middleware and runs them in registration order for every incoming request
+// middleware and dispatches each request to the matching ones in registration order; each ends the response or calls next()
 const app = express();
 
-// Route: Original "Hello world" endpoint
+// Route: GET / serves the plain-text "Hello, World!" greeting
 // Motive: Express routes follow the app.METHOD(path, handler) pattern (here GET on '/'); the handler receives
 // Node's req/res objects enhanced with Express helpers such as res.status(), res.type() and res.send()
 app.get('/', (req, res) => {
   // Respond with status 200 and an explicit text/plain content type
-  // Motive: res.send() with a string defaults to text/html, so .type('text/plain') keeps the original response format
+  // Motive: res.send() defaults string bodies to text/html; .type('text/plain') preserves this route's plain-text contract
   res.status(200).type('text/plain').send('Hello, World!\n');
 });
 
-// Route: New "Good evening" endpoint
+// Route: GET /evening serves the plain-text "Good evening" greeting
 // Motive: Every additional endpoint is one more app.METHOD(path, handler) call; paths without a route
 // fall through to Express's built-in 404 response
 app.get('/evening', (req, res) => {
@@ -33,7 +33,7 @@ app.get('/evening', (req, res) => {
 // Express error handling middleware (must be after all routes)
 // Motive: Express recognises error handlers by their four arguments (err, req, res, next), so the unused next
 // must stay in the signature; registered last, it receives errors thrown by any route above (Express 5 also
-// forwards rejected promises from async handlers here), replacing the old per-request try/catch
+// forwards rejected promises from async handlers here)
 app.use((err, req, res, next) => {
   console.error('Error processing request:', err);
 
@@ -46,8 +46,8 @@ app.use((err, req, res, next) => {
 
 // Create HTTP server from Express app
 // Motive: An Express app is a valid (req, res) callback for http.createServer; using it instead of Express's own listen helper
-// keeps an explicit server instance, so the server event handlers, graceful shutdown and server.listen() below
-// keep working unchanged
+// lets server.on(...) handlers attach before server.listen() starts accepting connections
+// and lets gracefulShutdown close that same HTTP server
 const server = http.createServer(app);
 
 // Handle server-level errors (e.g., port already in use, permission denied)
