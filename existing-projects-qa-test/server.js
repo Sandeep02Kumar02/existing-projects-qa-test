@@ -45,7 +45,7 @@ app.use((err, req, res, next) => {
 });
 
 // Create HTTP server from Express app
-// Motive: An Express app is a valid (req, res) callback for http.createServer; using it instead of app.listen()
+// Motive: An Express app is a valid (req, res) callback for http.createServer; using it instead of Express's own listen helper
 // keeps an explicit server instance, so the server event handlers, graceful shutdown and server.listen() below
 // keep working unchanged
 const server = http.createServer(app);
