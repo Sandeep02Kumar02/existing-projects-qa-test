@@ -1,41 +1,54 @@
 const http = require('http');
+// Express.js web framework for routing and middleware
+// Motive: Express adds declarative routing and middleware on top of Node's http module, while http is still
+// needed to create and own the server instance whose lifecycle (events, listen, graceful shutdown) is managed below
+const express = require('express');
 
 // Configuration with environment variable support for production flexibility
 // Motive: Allow deployment-time configuration without code changes, following 12-factor app principles
 const hostname = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
 
-// Request handler with proper error handling
-// Motive: Prevent request processing errors from crashing the entire server process
-const server = http.createServer((req, res) => {
-  try {
-    // Input validation: Ensure request method and URL are present
-    // Motive: Prevent null reference errors when accessing request properties
-    if (!req.method || !req.url) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Bad Request: Invalid request format\n');
-      return;
-    }
+// Create Express application
+// Motive: express() returns an app that is itself a request handler function; it collects routes and
+// middleware and runs them in registration order for every incoming request
+const app = express();
 
-    // Normal request processing
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/plain');
-    res.end('Hello, World!\n');
-  } catch (error) {
-    // Handle any synchronous errors in request processing
-    // Motive: Contain errors within request scope, log for debugging, return 500 to client
-    console.error('Error processing request:', error);
-    
-    // Only send error response if headers haven't been sent
-    // Motive: Prevent "Cannot set headers after they are sent" errors
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Internal Server Error\n');
-    }
+// Route: Original "Hello world" endpoint
+// Motive: Express routes follow the app.METHOD(path, handler) pattern (here GET on '/'); the handler receives
+// Node's req/res objects enhanced with Express helpers such as res.status(), res.type() and res.send()
+app.get('/', (req, res) => {
+  // Respond with status 200 and an explicit text/plain content type
+  // Motive: res.send() with a string defaults to text/html, so .type('text/plain') keeps the original response format
+  res.status(200).type('text/plain').send('Hello, World!\n');
+});
+
+// Route: New "Good evening" endpoint
+// Motive: Every additional endpoint is one more app.METHOD(path, handler) call; paths without a route
+// fall through to Express's built-in 404 response
+app.get('/evening', (req, res) => {
+  res.status(200).type('text/plain').send('Good evening\n');
+});
+
+// Express error handling middleware (must be after all routes)
+// Motive: Express recognises error handlers by their four arguments (err, req, res, next), so the unused next
+// must stay in the signature; registered last, it receives errors thrown by any route above (Express 5 also
+// forwards rejected promises from async handlers here), replacing the old per-request try/catch
+app.use((err, req, res, next) => {
+  console.error('Error processing request:', err);
+
+  // Only send error response if headers haven't been sent
+  // Motive: Prevent "Cannot set headers after they are sent" errors
+  if (!res.headersSent) {
+    res.status(500).type('text/plain').send('Internal Server Error\n');
   }
 });
+
+// Create HTTP server from Express app
+// Motive: An Express app is a valid (req, res) callback for http.createServer; using it instead of app.listen()
+// keeps an explicit server instance, so the server event handlers, graceful shutdown and server.listen() below
+// keep working unchanged
+const server = http.createServer(app);
 
 // Handle server-level errors (e.g., port already in use, permission denied)
 // Motive: Prevent unhandled server binding failures from crashing process with unclear error messages
