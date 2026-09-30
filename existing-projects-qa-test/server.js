@@ -20,6 +20,11 @@ const app = express();
 app.get('/', (req, res) => {
   // Respond with status 200 and an explicit text/plain content type
   // Motive: res.send() defaults string bodies to text/html; .type('text/plain') preserves this route's plain-text contract
+  // res.send() also sets Content-Length from the body's byte length, while a bare res.end() on Node's http module
+  // declares it only when a body is sent over HTTP/1.1
+  // Motive: HEAD / is answered by this GET route with headers only, so it reports the GET body's 14 bytes; and a
+  // declared length lets HTTP/1.0 responses end at that length instead of by closing the socket, so an HTTP/1.0
+  // client that sends Connection: keep-alive can reuse the connection
   res.status(200).type('text/plain').send('Hello, World!\n');
 });
 
@@ -27,6 +32,7 @@ app.get('/', (req, res) => {
 // Motive: Every additional endpoint is one more app.METHOD(path, handler) call; paths without a route
 // fall through to Express's built-in 404 response
 app.get('/evening', (req, res) => {
+  // res.send() frames this response the same way as '/': Content-Length 13 on GET and HEAD /evening
   res.status(200).type('text/plain').send('Good evening\n');
 });
 
